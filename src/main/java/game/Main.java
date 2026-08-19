@@ -10,6 +10,16 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 
+import game.network.GameClient;
+import game.network.GameServer;
+
+import javafx.scene.control.Alert;
+import javafx.scene.control.ButtonType;
+import javafx.scene.control.TextInputDialog;
+
+import java.io.IOException;
+import java.util.Optional;
+
 public class Main extends Application {
 
 	private Game game;
@@ -23,6 +33,14 @@ public class Main extends Application {
 	private Label playerTwoTerritoryLabel;
 
 	private Button passButton;
+	private Button resetButton;
+
+	private GameServer server;
+	private GameClient client;
+
+	private Button hostButton;
+	private Button joinButton;
+	private Label networkStatusLabel;
 
 	@Override
 	public void start(Stage stage) {
@@ -43,7 +61,13 @@ public class Main extends Application {
 
 		passButton = new Button("Pass Move");
 
-		Button resetButton = new Button("Reset Game");
+		resetButton = new Button("Reset Game");
+
+		hostButton = new Button("Host Game");
+
+		joinButton = new Button("Join Game");
+
+		networkStatusLabel = new Label("Status: Not Connected");
 
 		/*
 		 * Create board.
@@ -74,6 +98,16 @@ public class Main extends Application {
 			resetGame();
 		});
 
+		hostButton.setOnAction(event -> {
+
+			hostGame();
+		});
+
+		joinButton.setOnAction(event -> {
+
+			joinGame();
+		});
+
 		/*
 		 * Initial UI update.
 		 */
@@ -96,7 +130,9 @@ public class Main extends Application {
 		VBox controls = new VBox(
 				5,
 				turnLabel,
-				territoryDisplay,
+				networkStatusLabel,
+				hostButton,
+				joinButton,
 				passButton,
 				resetButton);
 
@@ -188,6 +224,158 @@ public class Main extends Application {
 		 * Update UI.
 		 */
 		updateDisplay();
+
+		networkStatusLabel.setText(
+				"Status: Not Connected");
+	}
+
+	private void hostGame() {
+
+		if (server != null
+				|| client != null) {
+
+			return;
+		}
+
+		/*
+		 * Port used for the game.
+		 */
+		int port = 5000;
+
+		try {
+
+			server = new GameServer(game);
+
+			/*
+			 * The host controls Player 1.
+			 */
+			game.setLocalPlayer(
+					Player.PLAYER_ONE);
+
+			/*
+			 * Send every successful local move
+			 * through the server.
+			 */
+			game.setMoveMade(
+					move -> server.sendMove(move));
+
+			/*
+			 * Update connection status when the
+			 * client connects.
+			 */
+			server.setConnectionChanged(
+					() -> {
+
+						networkStatusLabel.setText(
+								"Status: Player connected");
+
+						hostButton.setDisable(true);
+						joinButton.setDisable(true);
+					});
+
+			server.start(port);
+
+			networkStatusLabel.setText(
+					"Status: Waiting for player...");
+
+			hostButton.setDisable(true);
+			joinButton.setDisable(true);
+
+		} catch (IOException e) {
+
+			server = null;
+
+			showError(
+					"Unable to host game",
+					e.getMessage());
+		}
+	}
+
+	private void joinGame() {
+
+		if (server != null
+				|| client != null) {
+
+			return;
+		}
+
+		TextInputDialog dialog = new TextInputDialog(
+				"127.0.0.1");
+
+		dialog.setTitle(
+				"Join Game");
+
+		dialog.setHeaderText(
+				"Enter the host address");
+
+		dialog.setContentText(
+				"Host IP address:");
+
+		Optional<String> result = dialog.showAndWait();
+
+		if (result.isEmpty()) {
+			return;
+		}
+
+		String host = result.get().trim();
+
+		if (host.isEmpty()) {
+			return;
+		}
+
+		int port = 5000;
+
+		try {
+
+			client = new GameClient(game);
+
+			/*
+			 * The client controls Player 2.
+			 */
+			game.setLocalPlayer(
+					Player.PLAYER_TWO);
+
+			/*
+			 * Send successful local moves
+			 * through the client.
+			 */
+			game.setMoveMade(
+					move -> client.sendMove(move));
+
+			client.connect(
+					host,
+					port);
+
+			networkStatusLabel.setText(
+					"Status: Connected");
+
+			hostButton.setDisable(true);
+			joinButton.setDisable(true);
+
+		} catch (IOException e) {
+
+			client = null;
+
+			showError(
+					"Unable to join game",
+					e.getMessage());
+		}
+	}
+
+	private void showError(
+			String title,
+			String message) {
+
+		Alert alert = new Alert(
+				Alert.AlertType.ERROR,
+				message,
+				ButtonType.OK);
+
+		alert.setTitle(title);
+
+		alert.setHeaderText(null);
+
+		alert.showAndWait();
 	}
 
 	private void registerGameCallback() {

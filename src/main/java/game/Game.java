@@ -3,6 +3,8 @@ package game;
 import java.util.ArrayList;
 import java.util.List;
 
+import java.util.function.Consumer;
+
 public class Game {
 
     private final Board board;
@@ -41,6 +43,12 @@ public class Game {
      * has changed.
      */
     private Runnable gameStateChanged;
+
+    /*
+     * Callback used to notify the networking layer that
+     * a local move was successfully completed.
+     */
+    private Consumer<Move> moveMade;
 
     public Game() {
 
@@ -454,6 +462,16 @@ public class Game {
     }
 
     /*
+     * Registers the callback used when this game makes
+     * a local move.
+     */
+    public void setMoveMade(
+            Consumer<Move> callback) {
+
+        this.moveMade = callback;
+    }
+
+    /*
      * Tells the UI that the game state has changed.
      */
     private void notifyGameStateChanged() {
@@ -461,6 +479,18 @@ public class Game {
         if (gameStateChanged != null) {
 
             gameStateChanged.run();
+        }
+    }
+
+    /*
+     * Notifies the networking layer that a local move
+     * was successfully completed.
+     */
+    private void notifyMoveMade(Move move) {
+
+        if (moveMade != null) {
+
+            moveMade.accept(move);
         }
     }
 
@@ -740,11 +770,22 @@ public class Game {
             return false;
         }
 
-        return movePiece(
+        boolean success = movePiece(
                 move.getSourceRow(),
                 move.getSourceColumn(),
                 move.getDestinationRow(),
                 move.getDestinationColumn());
+
+        /*
+         * Only notify the networking layer if the move
+         * was actually accepted.
+         */
+        if (success) {
+
+            notifyMoveMade(move);
+        }
+
+        return success;
     }
 
     public boolean movePiece(
