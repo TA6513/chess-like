@@ -601,6 +601,29 @@ public class Game {
     }
 
     public boolean movePiece(
+            int sourceRow,
+            int sourceColumn,
+            int destinationRow,
+            int destinationColumn) {
+
+        Cell source = board.getCell(
+                sourceRow,
+                sourceColumn);
+
+        Cell destination = board.getCell(
+                destinationRow,
+                destinationColumn);
+
+        if (source == null || destination == null) {
+            return false;
+        }
+
+        return movePiece(
+                source,
+                destination);
+    }
+
+    public boolean movePiece(
             Cell source,
             Cell destination) {
 

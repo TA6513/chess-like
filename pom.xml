@@ -153,32 +153,6 @@
 
             </plugin>
 
-            <plugin>
-                <groupId>org.openjfx</groupId>
-                
-                <artifactId>javafx-maven-plugin</artifactId>
-                
-                <version>0.0.8</version>
-
-                <configuration>
-
-                    <mainClass>
-                        game.Main
-                    </mainClass>
-
-                    <launcher>
-                        chess-like-game=game.Main
-                    </launcher>
-
-                    <options>
-                        <option>
-                            --enable-native-access=javafx.graphics
-                        </option>
-                    </options>
-
-                </configuration>
-            </plugin>
-
         </plugins>
 
     </build>

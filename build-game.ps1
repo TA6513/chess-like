@@ -25,16 +25,57 @@ $AppDir = "$ReleaseDir\$ProjectName"
 $ZipPath = "$ReleaseDir\$ProjectName.zip"
 
 # --------------------------------------------
-# Check Java
+# Java / JDK settings
 # --------------------------------------------
 
-Write-Host "[1/7] Checking Java..."
+$JavaHome = "C:\Program Files\Java\jdk-26.0.2"
+
+$JavaExe = "$JavaHome\bin\java.exe"
+$JavacExe = "$JavaHome\bin\javac.exe"
+$JpackageExe = "$JavaHome\bin\jpackage.exe"
+
+# --------------------------------------------
+# Check JDK
+# --------------------------------------------
+
+Write-Host "[1/7] Checking JDK..."
 Write-Host ""
 
-java --version
+if (-not (Test-Path $JavaExe)) {
+    throw "Java was not found at: $JavaExe"
+}
+
+if (-not (Test-Path $JavacExe)) {
+    throw "javac was not found at: $JavacExe"
+}
+
+if (-not (Test-Path $JpackageExe)) {
+    throw "jpackage was not found at: $JpackageExe"
+}
+
+# Set JAVA_HOME for Maven and other tools
+$env:JAVA_HOME = $JavaHome
+
+# Put the correct JDK first on PATH
+$env:Path = "$JavaHome\bin;$env:Path"
+
+Write-Host "JAVA_HOME:"
+Write-Host "    $env:JAVA_HOME"
+Write-Host ""
+
+Write-Host "Java:"
+& $JavaExe --version
 
 if ($LASTEXITCODE -ne 0) {
-    throw "Java could not be found."
+    throw "Java could not be executed."
+}
+
+Write-Host ""
+Write-Host "javac:"
+& $JavacExe --version
+
+if ($LASTEXITCODE -ne 0) {
+    throw "javac could not be executed."
 }
 
 # --------------------------------------------
@@ -59,10 +100,10 @@ Write-Host ""
 Write-Host "[3/7] Checking jpackage..."
 Write-Host ""
 
-jpackage --version
+& $JpackageExe --version
 
 if ($LASTEXITCODE -ne 0) {
-    throw "jpackage could not be found."
+    throw "jpackage could not be executed."
 }
 
 # --------------------------------------------
@@ -158,7 +199,7 @@ Write-Host ""
 Write-Host "Creating application image..."
 Write-Host ""
 
-jpackage `
+& $JpackageExe `
     --type app-image `
     --name "$ProjectName" `
     --input "$PackageDir" `
@@ -174,14 +215,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # --------------------------------------------
-# jpackage creates:
-#
-# release\
-# └── Chess Like Game\
-#     ├── Chess Like Game.exe
-#     ├── app\
-#     └── runtime\
-#
+# Verify application image
 # --------------------------------------------
 
 if (-not (Test-Path $AppDir)) {

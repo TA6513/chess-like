@@ -105,11 +105,21 @@ public class Board extends GridPane {
         /*
          * Try to move to the clicked cell.
          */
-        if (game.movePiece(
-                selectedCell,
-                cell)) {
+        if (selectedCell != null) {
 
-            clearSelection();
+            boolean moved = game.movePiece(
+                    selectedCell.getRow(),
+                    selectedCell.getColumn(),
+                    cell.getRow(),
+                    cell.getColumn());
+
+            if (moved) {
+
+                selectedCell = null;
+
+                clearHighlights();
+
+            }
 
             return;
         }
