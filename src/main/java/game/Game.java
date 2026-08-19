@@ -14,6 +14,14 @@ public class Game {
     private Player winner;
 
     /*
+     * The player controlled by this copy of the game.
+     *
+     * In network play, this will be either PLAYER_ONE
+     * or PLAYER_TWO.
+     */
+    private Player localPlayer;
+
+    /*
      * The player whose turn it currently is.
      */
     private Player currentPlayer;
@@ -48,6 +56,12 @@ public class Game {
          * Player 1 starts the game.
          */
         currentPlayer = Player.PLAYER_ONE;
+
+        /*
+         * Until networking is configured, this copy of the
+         * game controls Player 1.
+         */
+        localPlayer = Player.PLAYER_ONE;
 
         /*
          * Player 1 gets only one action on the opening turn.
@@ -245,6 +259,28 @@ public class Game {
         }
 
         cell.setPiece(piece);
+    }
+
+    public void setLocalPlayer(Player player) {
+
+        if (player != Player.PLAYER_ONE
+                && player != Player.PLAYER_TWO) {
+
+            throw new IllegalArgumentException(
+                    "Local player must be PLAYER_ONE or PLAYER_TWO.");
+        }
+
+        localPlayer = player;
+    }
+
+    public Player getLocalPlayer() {
+
+        return localPlayer;
+    }
+
+    public boolean isLocalPlayersTurn() {
+
+        return currentPlayer == localPlayer;
     }
 
     /*
@@ -600,6 +636,81 @@ public class Game {
         return true;
     }
 
+    private boolean applyMove(
+            Cell source,
+            Cell destination) {
+
+        if (gameOver) {
+            return false;
+        }
+
+        if (!isValidMove(source, destination)) {
+            return false;
+        }
+
+        Piece movingPiece = source.getPiece();
+
+        Piece targetPiece = destination.getPiece();
+
+        /*
+         * Capture neutral piece.
+         */
+        if (targetPiece != null
+                && targetPiece.wasOriginallyNeutral()) {
+
+            targetPiece.capture(currentPlayer);
+
+            destination.claim(currentPlayer);
+
+            movingPiece.setMovedThisTurn(true);
+
+            checkGameOver();
+
+            if (!gameOver) {
+                useMove();
+            }
+
+            refreshBoard();
+
+            notifyGameStateChanged();
+
+            return true;
+        }
+
+        /*
+         * Capture enemy piece.
+         */
+        if (targetPiece != null) {
+
+            removePiece(targetPiece);
+        }
+
+        /*
+         * Move attacking piece.
+         */
+        destination.setPiece(
+                movingPiece);
+
+        destination.claim(
+                movingPiece.getOwner());
+
+        source.setPiece(null);
+
+        movingPiece.setMovedThisTurn(true);
+
+        checkGameOver();
+
+        if (!gameOver) {
+            useMove();
+        }
+
+        refreshBoard();
+
+        notifyGameStateChanged();
+
+        return true;
+    }
+
     public boolean movePiece(
             int sourceRow,
             int sourceColumn,
@@ -623,6 +734,19 @@ public class Game {
                 destination);
     }
 
+    public boolean movePiece(Move move) {
+
+        if (move == null) {
+            return false;
+        }
+
+        return movePiece(
+                move.getSourceRow(),
+                move.getSourceColumn(),
+                move.getDestinationRow(),
+                move.getDestinationColumn());
+    }
+
     public boolean movePiece(
             Cell source,
             Cell destination) {
@@ -631,109 +755,45 @@ public class Game {
             return false;
         }
 
-        if (!isValidMove(source, destination)) {
+        /*
+         * Local moves must belong to this computer.
+         */
+        if (!isLocalPlayersTurn()) {
             return false;
         }
 
-        Piece movingPiece = source.getPiece();
+        return applyMove(source, destination);
+    }
 
-        Piece targetPiece = destination.getPiece();
+    public boolean applyRemoteMove(Move move) {
 
-        /*
-         * Capture neutral piece.
-         *
-         * The neutral piece stays on its square,
-         * changes allegiance, and its cell becomes
-         * permanently claimed by the capturing player.
-         */
-        if (targetPiece != null
-                && targetPiece.wasOriginallyNeutral()) {
-
-            /*
-             * Change the neutral piece's allegiance.
-             */
-            targetPiece.capture(currentPlayer);
-
-            /*
-             * Claim the neutral piece's cell.
-             *
-             * claim() will only work if the cell has not
-             * already been claimed.
-             */
-            destination.claim(currentPlayer);
-
-            /*
-             * The attacking piece has used its move even
-             * though it did not physically move.
-             */
-            movingPiece.setMovedThisTurn(true);
-
-            /*
-             * Check victory.
-             */
-            checkGameOver();
-
-            /*
-             * Only advance the turn if the game isn't over.
-             */
-            if (!gameOver) {
-                useMove();
-            }
-
-            refreshBoard();
-
-            notifyGameStateChanged();
-
-            return true;
+        if (move == null) {
+            return false;
         }
 
         /*
-         * Capture an enemy piece.
-         *
-         * Enemy pieces are removed from the board.
+         * A remote move should only arrive while the
+         * opponent is the current player.
          */
-        if (targetPiece != null) {
-
-            removePiece(targetPiece);
+        if (isLocalPlayersTurn()) {
+            return false;
         }
 
-        /*
-         * Move attacking piece.
-         */
-        destination.setPiece(
-                movingPiece);
+        Cell source = board.getCell(
+                move.getSourceRow(),
+                move.getSourceColumn());
 
-        /*
-         * If the destination was previously unclaimed,
-         * permanently claim it for the moving piece's player.
-         *
-         * If it was already claimed, claim() does nothing.
-         */
-        destination.claim(
-                movingPiece.getOwner());
+        Cell destination = board.getCell(
+                move.getDestinationRow(),
+                move.getDestinationColumn());
 
-        source.setPiece(null);
-
-        movingPiece.setMovedThisTurn(true);
-
-        /*
-         * Check whether the enemy has been completely
-         * eliminated.
-         */
-        checkGameOver();
-
-        /*
-         * Only advance the turn if the game isn't over.
-         */
-        if (!gameOver) {
-            useMove();
+        if (source == null || destination == null) {
+            return false;
         }
 
-        refreshBoard();
-
-        notifyGameStateChanged();
-
-        return true;
+        return applyMove(
+                source,
+                destination);
     }
 
     /*

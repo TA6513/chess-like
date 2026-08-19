@@ -347,28 +347,32 @@ public class Main extends Application {
 		Player player = game.getCurrentPlayer();
 
 		String playerText;
-
 		String backgroundColor;
 
 		if (player == Player.PLAYER_ONE) {
-
-			playerText = "PLAYER 1'S TURN\n"
-					+ "Moves remaining: "
-					+ game.getMovesRemaining();
 
 			backgroundColor = "#1C32FF";
 
 		} else {
 
-			playerText = "PLAYER 2'S TURN\n"
-					+ "Moves remaining: "
-					+ game.getMovesRemaining();
-
 			backgroundColor = "#40A056";
 		}
 
-		turnLabel.setText(
-				playerText);
+		if (game.isLocalPlayersTurn()) {
+
+			playerText = player == Player.PLAYER_ONE
+					? "PLAYER 1'S TURN\n"
+					: "PLAYER 2'S TURN\n";
+
+		} else {
+
+			playerText = "OPPONENT'S TURN\n";
+		}
+
+		playerText += "Moves remaining: "
+				+ game.getMovesRemaining();
+
+		turnLabel.setText(playerText);
 
 		turnLabel.setTextFill(
 				javafx.scene.paint.Color.WHITE);

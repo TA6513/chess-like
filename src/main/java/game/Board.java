@@ -64,6 +64,21 @@ public class Board extends GridPane {
         if (game == null) {
             return;
         }
+        
+        /*
+         * Don't allow interaction after the game ends.
+         */
+        if (game.isGameOver()) {
+            return;
+        }
+
+        /*
+         * Don't allow this computer to make a move
+         * when it is the opponent's turn.
+         */
+        if (!game.isLocalPlayersTurn()) {
+            return;
+        }
 
         /*
          * No piece currently selected.
@@ -107,11 +122,13 @@ public class Board extends GridPane {
          */
         if (selectedCell != null) {
 
-            boolean moved = game.movePiece(
+            Move move = new Move(
                     selectedCell.getRow(),
                     selectedCell.getColumn(),
                     cell.getRow(),
                     cell.getColumn());
+
+            boolean moved = game.movePiece(move);
 
             if (moved) {
 
