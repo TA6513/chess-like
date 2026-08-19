@@ -17,7 +17,6 @@ import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 
 import java.io.IOException;
-import java.util.Optional;
 
 public class Main extends Application {
 
@@ -349,6 +348,16 @@ public class Main extends Application {
 						}
 					});
 
+			game.setPassMade(
+					() -> {
+
+						if (server != null
+								&& server.isConnected()) {
+
+							server.sendPass();
+						}
+					});
+
 			/*
 			 * Handle connection changes.
 			 */
@@ -496,6 +505,16 @@ public class Main extends Application {
 								&& client.isConnected()) {
 
 							client.sendMove(move);
+						}
+					});
+
+			game.setPassMade(
+					() -> {
+
+						if (client != null
+								&& client.isConnected()) {
+
+							client.sendPass();
 						}
 					});
 

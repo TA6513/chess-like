@@ -144,9 +144,6 @@ public class GameServer {
         }
     }
 
-    /*
-     * Handles a message received from the client.
-     */
     private void handleMessage(
             String message) {
 
@@ -161,7 +158,9 @@ public class GameServer {
         }
 
         /*
-         * Handle a move received from Player 2.
+         * -----------------------------------------
+         * MOVE
+         * -----------------------------------------
          */
         if (message.startsWith("MOVE ")) {
 
@@ -169,10 +168,6 @@ public class GameServer {
 
                 Move move = Move.deserialize(message);
 
-                /*
-                 * Game state must be modified on the
-                 * JavaFX application thread.
-                 */
                 Platform.runLater(() -> {
 
                     boolean accepted = game.applyRemoteMove(move);
@@ -191,7 +186,34 @@ public class GameServer {
                         "Invalid move received: "
                                 + message);
             }
+
+            return;
         }
+
+        /*
+         * -----------------------------------------
+         * PASS
+         * -----------------------------------------
+         */
+        if (message.equals("PASS")) {
+
+            Platform.runLater(() -> {
+
+                boolean accepted = game.applyRemotePass();
+
+                if (!accepted) {
+
+                    System.err.println(
+                            "Remote pass was rejected.");
+                }
+            });
+
+            return;
+        }
+
+        System.err.println(
+                "Unknown network message: "
+                        + message);
     }
 
     /*
@@ -205,6 +227,14 @@ public class GameServer {
 
         sendMessage(
                 move.serialize());
+    }
+
+    /*
+     * Sends a pass action to the client.
+     */
+    public void sendPass() {
+
+        sendMessage("PASS");
     }
 
     /*

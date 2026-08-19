@@ -50,6 +50,12 @@ public class Game {
      */
     private Consumer<Move> moveMade;
 
+    /*
+     * Callback used to notify the networking layer
+     * when the local player passes an action.
+     */
+    private Runnable passMade;
+
     public Game() {
 
         board = new Board();
@@ -344,7 +350,8 @@ public class Game {
     }
 
     /*
-     * Allows the player to voluntarily give up one action.
+     * Allows the LOCAL player to voluntarily
+     * give up one action.
      */
     public void passMove() {
 
@@ -352,34 +359,61 @@ public class Game {
             return;
         }
 
-        if (movesRemaining <= 0) {
+        /*
+         * A local player cannot pass during
+         * the opponent's turn.
+         */
+        if (!isLocalPlayersTurn()) {
             return;
         }
 
         /*
-         * Nothing to pass if there are no actions remaining.
+         * Apply the pass.
          */
+        boolean success = applyPass();
+
+        /*
+         * Tell the network about a successful
+         * locally initiated pass.
+         */
+        if (success) {
+            notifyPassMade();
+        }
+    }
+
+    /*
+     * Applies the actual pass operation.
+     *
+     * Used by both local and remote passes.
+     */
+    private boolean applyPass() {
+
+        if (gameOver) {
+            return false;
+        }
+
         if (movesRemaining <= 0) {
-            return;
+            return false;
         }
 
         movesRemaining--;
 
         /*
-         * If this was the final action,
-         * switch players.
+         * If no actions remain, end the turn.
          */
         if (movesRemaining == 0) {
 
             endTurn();
 
-            return;
+            return true;
         }
 
         /*
-         * The player still has another action.
+         * Player still has another action.
          */
         notifyGameStateChanged();
+
+        return true;
     }
 
     /*
@@ -469,6 +503,19 @@ public class Game {
             Consumer<Move> callback) {
 
         this.moveMade = callback;
+    }
+
+    public void setPassMade(
+            Runnable callback) {
+
+        this.passMade = callback;
+    }
+
+    private void notifyPassMade() {
+
+        if (passMade != null) {
+            passMade.run();
+        }
     }
 
     /*
@@ -914,6 +961,31 @@ public class Game {
         return applyMove(
                 source,
                 destination);
+    }
+
+    /*
+     * Applies a PASS message received from
+     * the other computer.
+     *
+     * This does NOT call notifyPassMade(),
+     * preventing the message from being sent
+     * back across the network.
+     */
+    public boolean applyRemotePass() {
+
+        if (gameOver) {
+            return false;
+        }
+
+        /*
+         * A remote pass should only arrive when
+         * the opponent is the current player.
+         */
+        if (isLocalPlayersTurn()) {
+            return false;
+        }
+
+        return applyPass();
     }
 
     /*
