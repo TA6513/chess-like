@@ -22,6 +22,8 @@ public class Cell extends StackPane {
     private boolean selected;
     private boolean highlighted;
 
+    private Player claimedBy;
+
     public Cell(int row, int column) {
 
         this.row = row;
@@ -38,6 +40,8 @@ public class Cell extends StackPane {
         pieceImage.setVisible(false);
 
         pieceImage.setMouseTransparent(true);
+
+        claimedBy = null;
 
         getChildren().addAll(
                 background,
@@ -113,21 +117,61 @@ public class Cell extends StackPane {
         pieceImage.setFitHeight(spriteSize);
     }
 
+    public Player getClaimedBy() {
+        return claimedBy;
+    }
+
+    public boolean isClaimed() {
+        return claimedBy != null;
+    }
+
+    public boolean claim(Player player) {
+
+        if (claimedBy != null || player == null) {
+            return false;
+        }
+
+        claimedBy = player;
+
+        updateAppearance();
+
+        return true;
+    }
+
     private void updateAppearance() {
 
         /*
-         * Normal board color.
+         * Determine the normal background color.
+         *
+         * Claimed cells keep their owner's color permanently.
+         * Unclaimed cells use the normal checkerboard pattern.
          */
-        background.setFill(
-                (row + column) % 2 == 0
-                        ? Color.WHITE
-                        : Color.LIGHTGRAY);
+        if (claimedBy == Player.PLAYER_ONE) {
+
+            background.setFill(
+                    Color.rgb(28, 50, 255));
+
+        } else if (claimedBy == Player.PLAYER_TWO) {
+
+            background.setFill(
+                    Color.rgb(64, 160, 86));
+
+        } else {
+
+            background.setFill(
+                    (row + column) % 2 == 0
+                            ? Color.WHITE
+                            : Color.LIGHTGRAY);
+        }
 
         /*
          * Valid move highlight.
          *
-         * This gets its own distinct color so it is
-         * clearly different from the normal board.
+         * The highlight temporarily overrides the cell's
+         * normal/claimed background color.
+         *
+         * Once the highlight is removed, the cell returns
+         * to its permanent claimed color.
          */
         if (highlighted) {
 
@@ -137,6 +181,10 @@ public class Cell extends StackPane {
 
         /*
          * Display piece sprite.
+         *
+         * The piece and the cell ownership are independent.
+         * Therefore, a Player 2 piece can be sitting on a
+         * Player 1 claimed cell without changing the cell color.
          */
         if (piece != null) {
 
@@ -158,7 +206,7 @@ public class Cell extends StackPane {
          * Cell border.
          *
          * Selected = yellow
-         * Highlighted = gold/orange
+         * Highlighted = orange
          * Normal = black
          */
         if (selected) {

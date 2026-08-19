@@ -105,7 +105,7 @@ public class Game {
 
             playerOnePieces.add(piece);
 
-            placePiece(
+            placeStartingPiece(
                     piece,
                     position[0],
                     position[1]);
@@ -136,7 +136,7 @@ public class Game {
 
             playerTwoPieces.add(piece);
 
-            placePiece(
+            placeStartingPiece(
                     piece,
                     position[0],
                     position[1]);
@@ -191,6 +191,31 @@ public class Game {
                 southeast,
                 10,
                 10);
+    }
+
+    private void placeStartingPiece(
+            Piece piece,
+            int row,
+            int column) {
+
+        Cell cell = board.getCell(row, column);
+
+        if (cell == null) {
+            throw new IllegalArgumentException(
+                    "Invalid board position: ("
+                            + row + ", "
+                            + column + ")");
+        }
+
+        if (cell.isOccupied()) {
+            throw new IllegalStateException(
+                    "Cell is already occupied: ("
+                            + row + ", "
+                            + column + ")");
+        }
+
+        cell.claim(piece.getOwner());
+        cell.setPiece(piece);
     }
 
     /*
@@ -248,11 +273,11 @@ public class Game {
      * - Capturing a neutral piece
      */
     public void useMove() {
-        
+
         if (gameOver) {
             return;
         }
-        
+
         movesRemaining--;
 
         /*
@@ -594,33 +619,55 @@ public class Game {
         /*
          * Capture neutral piece.
          *
-         * The neutral stays on its square and
-         * changes allegiance.
+         * The neutral piece stays on its square,
+         * changes allegiance, and its cell becomes
+         * permanently claimed by the capturing player.
          */
         if (targetPiece != null
                 && targetPiece.wasOriginallyNeutral()) {
 
+            /*
+             * Change the neutral piece's allegiance.
+             */
             targetPiece.capture(currentPlayer);
 
+            /*
+             * Claim the neutral piece's cell.
+             *
+             * claim() will only work if the cell has not
+             * already been claimed.
+             */
+            destination.claim(currentPlayer);
+
+            /*
+             * The attacking piece has used its move even
+             * though it did not physically move.
+             */
             movingPiece.setMovedThisTurn(true);
 
             /*
-             * Check victory because capturing a neutral
-             * can increase the capturing player's army,
-             * although it cannot normally eliminate
-             * the opponent.
+             * Check victory.
              */
             checkGameOver();
 
-            useMove();
+            /*
+             * Only advance the turn if the game isn't over.
+             */
+            if (!gameOver) {
+                useMove();
+            }
 
             refreshBoard();
+
+            notifyGameStateChanged();
 
             return true;
         }
 
         /*
          * Capture an enemy piece.
+         *
+         * Enemy pieces are removed from the board.
          */
         if (targetPiece != null) {
 
@@ -632,6 +679,15 @@ public class Game {
          */
         destination.setPiece(
                 movingPiece);
+
+        /*
+         * If the destination was previously unclaimed,
+         * permanently claim it for the moving piece's player.
+         *
+         * If it was already claimed, claim() does nothing.
+         */
+        destination.claim(
+                movingPiece.getOwner());
 
         source.setPiece(null);
 
