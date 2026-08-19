@@ -11,7 +11,7 @@ public class Game {
     private final List<Piece> playerTwoPieces;
     private final List<Piece> neutralPieces;
     private boolean gameOver;
-    private Player winningPlayer;
+    private Player winner;
 
     /*
      * The player whose turn it currently is.
@@ -38,7 +38,7 @@ public class Game {
 
         board = new Board();
         gameOver = false;
-        winningPlayer = null;
+        winner = null;
 
         playerOnePieces = new ArrayList<>();
         playerTwoPieces = new ArrayList<>();
@@ -752,57 +752,81 @@ public class Game {
 
     private void removePiece(Piece piece) {
 
-        if (piece == null) {
-            return;
+        if (piece.getOwner() == Player.PLAYER_ONE) {
+
+            playerOnePieces.remove(piece);
+
+        } else if (piece.getOwner() == Player.PLAYER_TWO) {
+
+            playerTwoPieces.remove(piece);
         }
+    }
 
-        /*
-         * Remove the piece from whichever player's
-         * piece list contains it.
-         */
-        playerOnePieces.remove(piece);
-        playerTwoPieces.remove(piece);
+    public int getPlayerOneClaimedCells() {
 
-        /*
-         * Neutral pieces are never removed.
-         */
-        neutralPieces.remove(piece);
+        return board.countClaimedCells(
+                Player.PLAYER_ONE);
+    }
+
+    public int getPlayerTwoClaimedCells() {
+
+        return board.countClaimedCells(
+                Player.PLAYER_TWO);
     }
 
     private void checkGameOver() {
 
-        boolean playerOneHasPieces = false;
-        boolean playerTwoHasPieces = false;
-
-        for (Piece piece : getAllPieces()) {
-
-            if (piece.belongsTo(Player.PLAYER_ONE)) {
-                playerOneHasPieces = true;
-            }
-
-            if (piece.belongsTo(Player.PLAYER_TWO)) {
-                playerTwoHasPieces = true;
-            }
-        }
+        /*
+         * Number of cells required for a majority.
+         *
+         * The board is 11 x 11 = 121 cells.
+         * A majority is therefore 61 cells.
+         */
+        int majority = (board.getSize() * board.getSize()) / 2 + 1;
 
         /*
-         * Player 1 has no remaining pieces.
+         * Count each player's claimed cells.
          */
-        if (!playerOneHasPieces) {
+        int playerOneClaimed = board.countClaimedCells(
+                Player.PLAYER_ONE);
+
+        int playerTwoClaimed = board.countClaimedCells(
+                Player.PLAYER_TWO);
+
+        /*
+         * Check whether either player has eliminated
+         * every piece belonging to the opposing player.
+         */
+        boolean playerOneEliminated = playerTwoPieces.isEmpty();
+
+        boolean playerTwoEliminated = playerOnePieces.isEmpty();
+
+        /*
+         * Player 1 wins by elimination or territory.
+         */
+        if (playerOneEliminated
+                || playerOneClaimed >= majority) {
 
             gameOver = true;
-            winningPlayer = Player.PLAYER_TWO;
+            winner = Player.PLAYER_ONE;
+
+            notifyGameStateChanged();
 
             return;
         }
 
         /*
-         * Player 2 has no remaining pieces.
+         * Player 2 wins by elimination or territory.
          */
-        if (!playerTwoHasPieces) {
+        if (playerTwoEliminated
+                || playerTwoClaimed >= majority) {
 
             gameOver = true;
-            winningPlayer = Player.PLAYER_ONE;
+            winner = Player.PLAYER_TWO;
+
+            notifyGameStateChanged();
+
+            return;
         }
     }
 
@@ -811,8 +835,8 @@ public class Game {
         return gameOver;
     }
 
-    public Player getWinningPlayer() {
+    public Player getWinner() {
 
-        return winningPlayer;
+        return winner;
     }
 }

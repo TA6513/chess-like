@@ -5,6 +5,7 @@ import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
@@ -16,6 +17,10 @@ public class Main extends Application {
 	private Board board;
 
 	private Label turnLabel;
+
+	private Label playerOneTerritoryLabel;
+
+	private Label playerTwoTerritoryLabel;
 
 	private Button passButton;
 
@@ -31,6 +36,10 @@ public class Main extends Application {
 		 * Create UI.
 		 */
 		turnLabel = new Label();
+
+		playerOneTerritoryLabel = new Label();
+
+		playerTwoTerritoryLabel = new Label();
 
 		passButton = new Button("Pass Move");
 
@@ -71,11 +80,23 @@ public class Main extends Application {
 		updateDisplay();
 
 		/*
+		 * Territory display.
+		 */
+		HBox territoryDisplay = new HBox(
+				25,
+				playerOneTerritoryLabel,
+				playerTwoTerritoryLabel);
+
+		territoryDisplay.setAlignment(
+				Pos.CENTER);
+
+		/*
 		 * Bottom controls.
 		 */
 		VBox controls = new VBox(
 				5,
 				turnLabel,
+				territoryDisplay,
 				passButton,
 				resetButton);
 
@@ -95,6 +116,10 @@ public class Main extends Application {
 
 		root.setFillWidth(true);
 
+		/*
+		 * Allow the board to use all available
+		 * vertical space.
+		 */
 		VBox.setVgrow(
 				board,
 				Priority.ALWAYS);
@@ -173,13 +198,78 @@ public class Main extends Application {
 
 	private void updateDisplay() {
 
+		/*
+		 * Update territory counts first.
+		 *
+		 * This happens during normal turns as well as
+		 * after the game ends.
+		 */
+		int playerOneCells = game.getBoard().countClaimedCells(
+				Player.PLAYER_ONE);
+
+		int playerTwoCells = game.getBoard().countClaimedCells(
+				Player.PLAYER_TWO);
+
+		int totalCells = game.getBoard().getSize()
+				* game.getBoard().getSize();
+
+		/*
+		 * Player 1 territory display.
+		 */
+		playerOneTerritoryLabel.setText(
+				"PLAYER 1 CELLS: "
+						+ playerOneCells
+						+ " / "
+						+ totalCells);
+
+		playerOneTerritoryLabel.setTextFill(
+				javafx.scene.paint.Color.rgb(
+						28,
+						50,
+						255));
+
+		playerOneTerritoryLabel.setStyle(
+				"-fx-font-size: 16px;" +
+						"-fx-font-weight: bold;" +
+						"-fx-padding: 4px;");
+
+		/*
+		 * Player 2 territory display.
+		 */
+		playerTwoTerritoryLabel.setText(
+				"PLAYER 2 CELLS: "
+						+ playerTwoCells
+						+ " / "
+						+ totalCells);
+
+		playerTwoTerritoryLabel.setTextFill(
+				javafx.scene.paint.Color.rgb(
+						64,
+						160,
+						86));
+
+		playerTwoTerritoryLabel.setStyle(
+				"-fx-font-size: 16px;" +
+						"-fx-font-weight: bold;" +
+						"-fx-padding: 4px;");
+
+		/*
+		 * Game over display.
+		 */
 		if (game.isGameOver()) {
 
-			Player winner = game.getWinningPlayer();
+			Player winner = game.getWinner();
 
 			String winnerText;
 
 			String backgroundColor;
+
+			String winReason;
+
+			/*
+			 * Number of cells required for a majority.
+			 */
+			int majority = totalCells / 2 + 1;
 
 			if (winner == Player.PLAYER_ONE) {
 
@@ -187,27 +277,65 @@ public class Main extends Application {
 
 				backgroundColor = "#1C32FF";
 
+				/*
+				 * Determine why Player 1 won.
+				 */
+				if (playerOneCells >= majority) {
+
+					winReason = "Territory: "
+							+ playerOneCells
+							+ " / "
+							+ totalCells;
+
+				} else {
+
+					winReason = "All Player 2 pieces eliminated";
+				}
+
 			} else {
 
 				winnerText = "PLAYER 2 WINS!";
 
 				backgroundColor = "#40A056";
+
+				/*
+				 * Determine why Player 2 won.
+				 */
+				if (playerTwoCells >= majority) {
+
+					winReason = "Territory: "
+							+ playerTwoCells
+							+ " / "
+							+ totalCells;
+
+				} else {
+
+					winReason = "All Player 1 pieces eliminated";
+				}
 			}
 
+			/*
+			 * Show winner and reason.
+			 */
 			turnLabel.setText(
-					winnerText);
+					winnerText
+							+ "\n"
+							+ winReason);
 
 			turnLabel.setTextFill(
 					javafx.scene.paint.Color.WHITE);
 
 			turnLabel.setStyle(
-					"-fx-font-size: 22px;" +
+					"-fx-font-size: 20px;" +
 							"-fx-font-weight: bold;" +
 							"-fx-padding: 8px 40px;" +
 							"-fx-background-color: "
 							+ backgroundColor
 							+ ";");
 
+			/*
+			 * Disable passing after the game ends.
+			 */
 			passButton.setDisable(true);
 
 			return;
@@ -219,6 +347,7 @@ public class Main extends Application {
 		Player player = game.getCurrentPlayer();
 
 		String playerText;
+
 		String backgroundColor;
 
 		if (player == Player.PLAYER_ONE) {
@@ -238,7 +367,8 @@ public class Main extends Application {
 			backgroundColor = "#40A056";
 		}
 
-		turnLabel.setText(playerText);
+		turnLabel.setText(
+				playerText);
 
 		turnLabel.setTextFill(
 				javafx.scene.paint.Color.WHITE);
@@ -251,8 +381,33 @@ public class Main extends Application {
 						+ backgroundColor
 						+ ";");
 
+		/*
+		 * Enable/disable pass button.
+		 */
 		passButton.setDisable(
 				game.getMovesRemaining() <= 0);
+	}
+
+	public boolean isGameOver() {
+
+		return game.isGameOver();
+	}
+
+	public Player getWinner() {
+
+		return game.getWinner();
+	}
+
+	public int getPlayerOneClaimedCells() {
+
+		return board.countClaimedCells(
+				Player.PLAYER_ONE);
+	}
+
+	public int getPlayerTwoClaimedCells() {
+
+		return board.countClaimedCells(
+				Player.PLAYER_TWO);
 	}
 
 	public static void main(String[] args) {

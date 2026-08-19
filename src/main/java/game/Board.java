@@ -202,4 +202,23 @@ public class Board extends GridPane {
 
         return SIZE;
     }
+
+    public int countClaimedCells(Player player) {
+
+        int count = 0;
+
+        for (int row = 0; row < SIZE; row++) {
+
+            for (int column = 0; column < SIZE; column++) {
+
+                Cell cell = cells[row][column];
+
+                if (cell.getClaimedBy() == player) {
+                    count++;
+                }
+            }
+        }
+
+        return count;
+    }
 }
