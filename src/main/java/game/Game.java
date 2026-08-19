@@ -684,6 +684,10 @@ public class Game {
 
         /*
          * Capture neutral piece.
+         *
+         * The neutral piece stays on its square,
+         * changes allegiance, and its cell becomes
+         * permanently claimed by the capturing player.
          */
         if (targetPiece != null
                 && targetPiece.wasOriginallyNeutral()) {
@@ -709,6 +713,8 @@ public class Game {
 
         /*
          * Capture enemy piece.
+         *
+         * Enemy pieces are removed from the board.
          */
         if (targetPiece != null) {
 
@@ -721,6 +727,10 @@ public class Game {
         destination.setPiece(
                 movingPiece);
 
+        /*
+         * Permanently claim the destination if
+         * it has not already been claimed.
+         */
         destination.claim(
                 movingPiece.getOwner());
 
@@ -741,6 +751,9 @@ public class Game {
         return true;
     }
 
+    /*
+     * Moves a piece using board coordinates.
+     */
     public boolean movePiece(
             int sourceRow,
             int sourceColumn,
@@ -755,7 +768,9 @@ public class Game {
                 destinationRow,
                 destinationColumn);
 
-        if (source == null || destination == null) {
+        if (source == null
+                || destination == null) {
+
             return false;
         }
 
@@ -764,30 +779,39 @@ public class Game {
                 destination);
     }
 
+    /*
+     * Performs a local move represented by a Move object.
+     */
     public boolean movePiece(Move move) {
 
         if (move == null) {
             return false;
         }
 
-        boolean success = movePiece(
+        Cell source = board.getCell(
                 move.getSourceRow(),
-                move.getSourceColumn(),
+                move.getSourceColumn());
+
+        Cell destination = board.getCell(
                 move.getDestinationRow(),
                 move.getDestinationColumn());
 
-        /*
-         * Only notify the networking layer if the move
-         * was actually accepted.
-         */
-        if (success) {
+        if (source == null
+                || destination == null) {
 
-            notifyMoveMade(move);
+            return false;
         }
 
-        return success;
+        return movePiece(
+                source,
+                destination);
     }
 
+    /*
+     * Performs a local move using board cells.
+     *
+     * Successful moves are sent to the networking layer.
+     */
     public boolean movePiece(
             Cell source,
             Cell destination) {
@@ -797,24 +821,71 @@ public class Game {
         }
 
         /*
-         * Local moves must belong to this computer.
+         * A local player can only move during
+         * their own turn.
          */
         if (!isLocalPlayersTurn()) {
             return false;
         }
 
-        return applyMove(source, destination);
+        if (source == null
+                || destination == null) {
+
+            return false;
+        }
+
+        /*
+         * Create the network representation of
+         * the move before changing the board.
+         */
+        Move move = new Move(
+                source.getRow(),
+                source.getColumn(),
+                destination.getRow(),
+                destination.getColumn());
+
+        /*
+         * Apply the move locally.
+         */
+        boolean success = applyMove(
+                source,
+                destination);
+
+        /*
+         * Only notify the networking layer if
+         * the move was successfully completed.
+         */
+        if (success) {
+
+            notifyMoveMade(move);
+        }
+
+        return success;
     }
 
+    /*
+     * Applies a move received from the other player.
+     *
+     * IMPORTANT:
+     *
+     * This method does NOT call notifyMoveMade().
+     *
+     * Otherwise the received move would be sent back
+     * to the other computer.
+     */
     public boolean applyRemoteMove(Move move) {
 
         if (move == null) {
             return false;
         }
 
+        if (gameOver) {
+            return false;
+        }
+
         /*
-         * A remote move should only arrive while the
-         * opponent is the current player.
+         * A remote move should only arrive when the
+         * other player is currently active.
          */
         if (isLocalPlayersTurn()) {
             return false;
@@ -828,10 +899,18 @@ public class Game {
                 move.getDestinationRow(),
                 move.getDestinationColumn());
 
-        if (source == null || destination == null) {
+        if (source == null
+                || destination == null) {
+
             return false;
         }
 
+        /*
+         * Apply the move directly.
+         *
+         * This changes the local game state but
+         * does not trigger the network callback.
+         */
         return applyMove(
                 source,
                 destination);

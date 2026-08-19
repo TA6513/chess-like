@@ -48,16 +48,14 @@ public class GameServer {
                     "Server is already running.");
         }
 
-        serverSocket =
-                new ServerSocket(port);
+        serverSocket = new ServerSocket(port);
 
         /*
          * Accept the connection on a background
          * thread so the JavaFX UI doesn't freeze.
          */
-        Thread connectionThread =
-                new Thread(
-                        this::waitForConnection);
+        Thread connectionThread = new Thread(
+                this::waitForConnection);
 
         connectionThread.setDaemon(true);
 
@@ -71,8 +69,7 @@ public class GameServer {
 
         try {
 
-            socket =
-                    serverSocket.accept();
+            socket = serverSocket.accept();
 
             setupConnection();
 
@@ -101,15 +98,13 @@ public class GameServer {
     private void setupConnection()
             throws IOException {
 
-        reader =
-                new BufferedReader(
-                        new InputStreamReader(
-                                socket.getInputStream()));
+        reader = new BufferedReader(
+                new InputStreamReader(
+                        socket.getInputStream()));
 
-        writer =
-                new PrintWriter(
-                        socket.getOutputStream(),
-                        true);
+        writer = new PrintWriter(
+                socket.getOutputStream(),
+                true);
     }
 
     /*
@@ -117,9 +112,8 @@ public class GameServer {
      */
     private void startListener() {
 
-        listenerThread =
-                new Thread(
-                        this::listenForMessages);
+        listenerThread = new Thread(
+                this::listenForMessages);
 
         listenerThread.setDaemon(true);
 
@@ -136,8 +130,7 @@ public class GameServer {
 
             String message;
 
-            while ((message =
-                    reader.readLine()) != null) {
+            while ((message = reader.readLine()) != null) {
 
                 handleMessage(message);
             }
@@ -168,40 +161,29 @@ public class GameServer {
         }
 
         /*
-         * Currently the only network message is
-         * a MOVE message.
+         * Handle a move received from Player 2.
          */
         if (message.startsWith("MOVE ")) {
 
             try {
 
-                Move move =
-                        Move.deserialize(message);
+                Move move = Move.deserialize(message);
 
                 /*
-                 * JavaFX/Game state should eventually
-                 * be handled on the JavaFX application
-                 * thread.
-                 *
-                 * For now Game itself contains the
-                 * game logic.
+                 * Game state must be modified on the
+                 * JavaFX application thread.
                  */
-                javafx.application.Platform.runLater(
-                        () -> {
+                Platform.runLater(() -> {
 
-                            boolean accepted =
-                                    game.applyRemoteMove(
-                                            move);
+                    boolean accepted = game.applyRemoteMove(move);
 
-                            if (accepted) {
+                    if (!accepted) {
 
-                                /*
-                                 * Send an acknowledgement
-                                 * back to the client.
-                                 */
-                                sendMessage("OK");
-                            }
-                        });
+                        System.err.println(
+                                "Remote move was rejected: "
+                                        + move.serialize());
+                    }
+                });
 
             } catch (IllegalArgumentException e) {
 

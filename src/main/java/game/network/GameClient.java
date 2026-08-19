@@ -49,10 +49,9 @@ public class GameClient {
                     "Client is already connected.");
         }
 
-        socket =
-                new Socket(
-                        host,
-                        port);
+        socket = new Socket(
+                host,
+                port);
 
         setupConnection();
 
@@ -73,15 +72,13 @@ public class GameClient {
     private void setupConnection()
             throws IOException {
 
-        reader =
-                new BufferedReader(
-                        new InputStreamReader(
-                                socket.getInputStream()));
+        reader = new BufferedReader(
+                new InputStreamReader(
+                        socket.getInputStream()));
 
-        writer =
-                new PrintWriter(
-                        socket.getOutputStream(),
-                        true);
+        writer = new PrintWriter(
+                socket.getOutputStream(),
+                true);
     }
 
     /*
@@ -89,9 +86,8 @@ public class GameClient {
      */
     private void startListener() {
 
-        listenerThread =
-                new Thread(
-                        this::listenForMessages);
+        listenerThread = new Thread(
+                this::listenForMessages);
 
         listenerThread.setDaemon(true);
 
@@ -107,8 +103,7 @@ public class GameClient {
 
             String message;
 
-            while ((message =
-                    reader.readLine()) != null) {
+            while ((message = reader.readLine()) != null) {
 
                 handleMessage(message);
             }
@@ -122,9 +117,6 @@ public class GameClient {
         }
     }
 
-    /*
-     * Handles messages from the host.
-     */
     private void handleMessage(
             String message) {
 
@@ -138,23 +130,30 @@ public class GameClient {
             return;
         }
 
+        /*
+         * Handle a move received from Player 1.
+         */
         if (message.startsWith("MOVE ")) {
 
             try {
 
-                Move move =
-                        Move.deserialize(message);
+                Move move = Move.deserialize(message);
 
                 /*
                  * Apply the remote move on the
                  * JavaFX application thread.
                  */
-                javafx.application.Platform.runLater(
-                        () -> {
+                Platform.runLater(() -> {
 
-                            game.applyRemoteMove(
-                                    move);
-                        });
+                    boolean accepted = game.applyRemoteMove(move);
+
+                    if (!accepted) {
+
+                        System.err.println(
+                                "Remote move was rejected: "
+                                        + move.serialize());
+                    }
+                });
 
             } catch (IllegalArgumentException e) {
 
