@@ -426,15 +426,44 @@ public class Main extends Application {
 
 		gameStarted = false;
 
+		/*
+		 * Hide and disable the board.
+		 */
 		setBoardActive(false);
 
-		setNodeVisible(
-				gameControls,
-				false);
+		/*
+		 * Hide all in-game controls.
+		 */
+		setNodeVisible(gameControls, false);
 
-		setNodeVisible(
-				setupControls,
-				true);
+		/*
+		 * Show the setup controls.
+		 */
+		setNodeVisible(setupControls, true);
+
+		/*
+		 * Explicitly restore interaction on the
+		 * setup container itself.
+		 */
+		setupControls.setDisable(false);
+		setupControls.setMouseTransparent(false);
+
+		/*
+		 * Restore all individual setup controls.
+		 */
+		enableConnectionControls();
+
+		/*
+		 * Ensure the setup UI is above anything
+		 * remaining in the layout.
+		 */
+		setupControls.toFront();
+
+		networkStatusLabel.setText(
+				"Status: Offline");
+
+		roomCodeLabel.setText(
+				"Room: -");
 	}
 
 	private void setBoardActive(
@@ -910,21 +939,79 @@ public class Main extends Application {
 
 	private void leaveGame() {
 
-		if (!gameStarted && networkMode == NetworkMode.OFFLINE) {
+		if (!gameStarted
+				&& networkMode == NetworkMode.OFFLINE) {
+
 			return;
 		}
 
+		/*
+		 * Mark this as an intentional disconnect.
+		 */
 		leavingNetworkGame = true;
+
+		/*
+		 * Close the old networking connections.
+		 */
 		stopNetworking();
 
-		replaceGame(new Game());
+		/*
+		 * Create the fresh game and board.
+		 */
+		Game newGame = new Game();
 
+		Board newBoard = newGame.getBoard();
+
+		newBoard.setAlignment(
+				Pos.CENTER);
+
+		/*
+		 * Replace the old board.
+		 */
+		VBox root = (VBox) board.getParent();
+
+		int boardIndex = root.getChildren()
+				.indexOf(board);
+
+		if (boardIndex < 0) {
+
+			leavingNetworkGame = false;
+
+			throw new IllegalStateException(
+					"Could not find the board in the main layout.");
+		}
+
+		root.getChildren()
+				.set(
+						boardIndex,
+						newBoard);
+
+		/*
+		 * Only now switch the references.
+		 */
+		game = newGame;
+
+		board = newBoard;
+
+		VBox.setVgrow(
+				board,
+				Priority.ALWAYS);
+
+		/*
+		 * Attach UI updates to the new Game.
+		 */
+		registerGameCallback();
+
+		/*
+		 * Return completely to the setup screen.
+		 */
 		showSetupScreen();
-		
-		networkStatusLabel.setText("Status: Offline");
-		roomCodeLabel.setText("Room: -");
+
 		roomCodeField.clear();
 
+		/*
+		 * Finish intentional-leave state.
+		 */
 		leavingNetworkGame = false;
 
 		updateDisplay();
