@@ -60,3 +60,13 @@ Run from source with:
 
 ```powershell
 mvn javafx:run
+
+## License
+
+Chess Like Game is source-available for personal use and modification.
+
+You may play, study, and modify the game for your own personal use.
+Redistribution of the original or modified game is not permitted without
+permission from the copyright holder.
+
+See [LICENSE](LICENSE) for details.
