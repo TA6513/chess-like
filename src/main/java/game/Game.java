@@ -13,6 +13,7 @@ public class Game {
     private final List<Piece> playerTwoPieces;
     private final List<Piece> neutralPieces;
     private boolean gameOver;
+    private boolean networkReady = true;
     private Player winner;
 
     /*
@@ -97,6 +98,7 @@ public class Game {
          * Prepare Player 1's pieces for their first turn.
          */
         resetPiecesForTurn();
+
     }
 
     /*
@@ -354,6 +356,10 @@ public class Game {
      * give up one action.
      */
     public void passMove() {
+
+        if (!networkReady) {
+            return;
+        }
 
         if (gameOver) {
             return;
@@ -863,6 +869,10 @@ public class Game {
             Cell source,
             Cell destination) {
 
+        if (!networkReady) {
+            return false;
+        }
+
         if (gameOver) {
             return false;
         }
@@ -908,6 +918,14 @@ public class Game {
         }
 
         return success;
+    }
+
+    public void setNetworkReady(boolean networkReady) {
+        this.networkReady = networkReady;
+    }
+
+    public boolean isNetworkReady() {
+        return networkReady;
     }
 
     /*

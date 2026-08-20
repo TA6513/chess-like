@@ -2,994 +2,1588 @@ package game;
 
 import game.network.GameClient;
 import game.network.GameServer;
+import game.network.OnlineGameClient;
 
 import javafx.application.Application;
+
 import javafx.geometry.Pos;
+
 import javafx.scene.Scene;
+
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
+
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
+
 import javafx.stage.Stage;
 
 import java.io.IOException;
 
 public class Main extends Application {
 
-	private Game game;
+    /*
+     * -----------------------------------------
+     * NETWORK MODE
+     * -----------------------------------------
+     */
 
-	private Board board;
+    private enum NetworkMode {
 
-	private Label turnLabel;
+        OFFLINE,
+        LAN_HOST,
+        LAN_CLIENT,
+        ONLINE
+    }
 
-	private Label playerOneTerritoryLabel;
+    /*
+     * -----------------------------------------
+     * GAME
+     * -----------------------------------------
+     */
 
-	private Label playerTwoTerritoryLabel;
+    private Game game;
 
-	private Label networkStatusLabel;
+    private Board board;
 
-	private Button passButton;
+    /*
+     * -----------------------------------------
+     * GAME UI
+     * -----------------------------------------
+     */
 
-	private Button resetButton;
+    private Label turnLabel;
 
-	private Button hostButton;
+    private Label playerOneTerritoryLabel;
 
-	private Button joinButton;
+    private Label playerTwoTerritoryLabel;
 
-	private TextField hostField;
+    private Label networkStatusLabel;
 
-	private TextField portField;
+    private Label roomCodeLabel;
 
-	private GameServer server;
+    private Button passButton;
 
-	private GameClient client;
+    private Button resetButton;
 
-	/*
-	 * True when this copy of the game is being used
-	 * for a network game.
-	 */
-	private boolean networkGame;
+    /*
+     * -----------------------------------------
+     * NETWORK UI
+     * -----------------------------------------
+     */
 
-	@Override
-	public void start(Stage stage) {
+    private Button hostLanButton;
 
-		/*
-		 * Create game.
-		 */
-		game = new Game();
+    private Button joinLanButton;
 
-		networkGame = false;
+    private Button createOnlineRoomButton;
 
-		/*
-		 * Create UI labels.
-		 */
-		turnLabel = new Label();
+    private Button joinOnlineRoomButton;
 
-		playerOneTerritoryLabel = new Label();
+    private TextField hostField;
 
-		playerTwoTerritoryLabel = new Label();
+    private TextField portField;
 
-		networkStatusLabel = new Label("Status: Offline");
+    private TextField roomCodeField;
 
-		/*
-		 * Create buttons.
-		 */
-		passButton = new Button("Pass Move");
+    /*
+     * -----------------------------------------
+     * NETWORK CONNECTIONS
+     * -----------------------------------------
+     */
 
-		resetButton = new Button("Reset Game");
+    private GameServer server;
 
-		hostButton = new Button("Host Game");
+    private GameClient client;
 
-		joinButton = new Button("Join Game");
+    private OnlineGameClient onlineClient;
 
-		/*
-		 * Host address field.
-		 */
-		hostField = new TextField("127.0.0.1");
+    private NetworkMode networkMode =
+            NetworkMode.OFFLINE;
 
-		hostField.setPrefWidth(130);
+    /*
+     * Prevent repeated GAME_OVER messages.
+     */
+    private boolean gameOverReported;
 
-		/*
-		 * Port field.
-		 */
-		portField = new TextField("5000");
+    /*
+     * -----------------------------------------
+     * START
+     * -----------------------------------------
+     */
 
-		portField.setPrefWidth(70);
+    @Override
+    public void start(
+            Stage stage) {
 
-		/*
-		 * Create board.
-		 */
-		board = game.getBoard();
+        game =
+                new Game();
 
-		board.setAlignment(
-				Pos.CENTER);
+        gameOverReported =
+                false;
 
-		/*
-		 * Register game callback.
-		 */
-		registerGameCallback();
+        /*
+         * Labels.
+         */
+        turnLabel =
+                new Label();
+
+        playerOneTerritoryLabel =
+                new Label();
+
+        playerTwoTerritoryLabel =
+                new Label();
+
+        networkStatusLabel =
+                new Label(
+                        "Status: Offline");
+
+        roomCodeLabel =
+                new Label(
+                        "Room: -");
+
+        /*
+         * Game buttons.
+         */
+        passButton =
+                new Button(
+                        "Pass Move");
+
+        resetButton =
+                new Button(
+                        "Reset Game");
+
+        /*
+         * LAN buttons.
+         */
+        hostLanButton =
+                new Button(
+                        "Host LAN Game");
+
+        joinLanButton =
+                new Button(
+                        "Join LAN Game");
+
+        /*
+         * Online buttons.
+         */
+        createOnlineRoomButton =
+                new Button(
+                        "Create Online Room");
+
+        joinOnlineRoomButton =
+                new Button(
+                        "Join Online Room");
+
+        /*
+         * Server/host address.
+         */
+        hostField =
+                new TextField(
+                        "127.0.0.1");
+
+        hostField.setPrefWidth(
+                160);
+
+        hostField.setPromptText(
+                "Server / LAN Host");
+
+        /*
+         * Port.
+         */
+        portField =
+                new TextField(
+                        "5000");
+
+        portField.setPrefWidth(
+                70);
+
+        /*
+         * Online room code.
+         */
+        roomCodeField =
+                new TextField();
+
+        roomCodeField.setPrefWidth(
+                100);
+
+        roomCodeField.setPromptText(
+                "Room Code");
+
+        /*
+         * Board.
+         */
+        board =
+                game.getBoard();
+
+        board.setAlignment(
+                Pos.CENTER);
+
+        registerGameCallback();
+
+        /*
+         * -------------------------------------
+         * BUTTON ACTIONS
+         * -------------------------------------
+         */
+
+        passButton.setOnAction(
+                event -> {
+
+                    game.passMove();
+                });
+
+        resetButton.setOnAction(
+                event -> {
+
+                    resetGame();
+                });
+
+        hostLanButton.setOnAction(
+                event -> {
+
+                    hostLanGame();
+                });
+
+        joinLanButton.setOnAction(
+                event -> {
+
+                    joinLanGame();
+                });
+
+        createOnlineRoomButton.setOnAction(
+                event -> {
+
+                    createOnlineRoom();
+                });
+
+        joinOnlineRoomButton.setOnAction(
+                event -> {
+
+                    joinOnlineRoom();
+                });
+
+        /*
+         * -------------------------------------
+         * LAYOUT
+         * -------------------------------------
+         */
+
+        HBox territoryDisplay =
+                new HBox(
+                        25,
+                        playerOneTerritoryLabel,
+                        playerTwoTerritoryLabel);
+
+        territoryDisplay.setAlignment(
+                Pos.CENTER);
+
+        HBox serverFields =
+                new HBox(
+                        5,
+                        new Label("Host:"),
+                        hostField,
+                        new Label("Port:"),
+                        portField);
+
+        serverFields.setAlignment(
+                Pos.CENTER);
+
+        HBox lanControls =
+                new HBox(
+                        8,
+                        hostLanButton,
+                        joinLanButton);
+
+        lanControls.setAlignment(
+                Pos.CENTER);
+
+        HBox onlineControls =
+                new HBox(
+                        8,
+                        createOnlineRoomButton,
+                        roomCodeField,
+                        joinOnlineRoomButton);
+
+        onlineControls.setAlignment(
+                Pos.CENTER);
+
+        VBox controls =
+                new VBox(
+                        7,
+                        networkStatusLabel,
+                        roomCodeLabel,
+                        serverFields,
+                        lanControls,
+                        onlineControls,
+                        territoryDisplay,
+                        turnLabel,
+                        passButton,
+                        resetButton);
+
+        controls.setAlignment(
+                Pos.CENTER);
+
+        VBox root =
+                new VBox(
+                        8,
+                        board,
+                        controls);
+
+        root.setAlignment(
+                Pos.CENTER);
+
+        root.setFillWidth(
+                true);
+
+        VBox.setVgrow(
+                board,
+                Priority.ALWAYS);
+
+        /*
+         * Window.
+         */
+        Scene scene =
+                new Scene(
+                        root,
+                        740,
+                        800);
+
+        stage.setTitle(
+                "Chess-Like Game");
+
+        stage.setScene(
+                scene);
+
+        stage.setResizable(
+                true);
+
+        stage.setOnCloseRequest(
+                event -> {
+
+                    stopNetworking();
+                });
+
+        updateDisplay();
 
-		/*
-		 * Pass button.
-		 */
-		passButton.setOnAction(event -> {
+        stage.show();
+    }
 
-			game.passMove();
-		});
+    /*
+     * =========================================
+     * LAN HOST
+     * =========================================
+     */
 
-		/*
-		 * Reset button.
-		 */
-		resetButton.setOnAction(event -> {
-
-			resetGame();
-		});
-
-		/*
-		 * Host button.
-		 */
-		hostButton.setOnAction(event -> {
-
-			hostGame();
-		});
-
-		/*
-		 * Join button.
-		 */
-		joinButton.setOnAction(event -> {
-
-			joinGame();
-		});
-
-		/*
-		 * Initial display.
-		 */
-		updateDisplay();
-
-		/*
-		 * Territory display.
-		 */
-		HBox territoryDisplay = new HBox(
-				25,
-				playerOneTerritoryLabel,
-				playerTwoTerritoryLabel);
-
-		territoryDisplay.setAlignment(
-				Pos.CENTER);
-
-		/*
-		 * Network controls.
-		 */
-		HBox networkControls = new HBox(
-				5,
-				hostButton,
-				new Label("Host:"),
-				hostField,
-				new Label("Port:"),
-				portField,
-				joinButton);
-
-		networkControls.setAlignment(
-				Pos.CENTER);
-
-		/*
-		 * Bottom controls.
-		 */
-		VBox controls = new VBox(
-				7,
-				networkStatusLabel,
-				networkControls,
-				territoryDisplay,
-				turnLabel,
-				passButton,
-				resetButton);
-
-		controls.setAlignment(
-				Pos.CENTER);
-
-		/*
-		 * Main layout.
-		 */
-		VBox root = new VBox(
-				8,
-				board,
-				controls);
-
-		root.setAlignment(
-				Pos.CENTER);
-
-		root.setFillWidth(true);
-
-		/*
-		 * Allow board to use available space.
-		 */
-		VBox.setVgrow(
-				board,
-				Priority.ALWAYS);
-
-		/*
-		 * Window.
-		 */
-		Scene scene = new Scene(
-				root,
-				700,
-				760);
-
-		stage.setTitle(
-				"Chess-Like Game");
-
-		stage.setScene(scene);
-
-		stage.setResizable(true);
-
-		stage.setOnCloseRequest(event -> {
-
-			/*
-			 * Stop the server if this computer is hosting.
-			 */
-			if (server != null) {
-
-				server.stop();
-
-				server = null;
-			}
-
-			/*
-			 * Disconnect from the host if this computer
-			 * is the client.
-			 */
-			if (client != null) {
-
-				client.disconnect();
-
-				client = null;
-			}
-		});
-
-		stage.show();
-	}
-
-	private void showError(
-			String title,
-			String message) {
-
-		Alert alert = new Alert(
-				Alert.AlertType.ERROR,
-				message,
-				ButtonType.OK);
-
-		alert.setTitle(title);
-
-		alert.setHeaderText(null);
-
-		alert.showAndWait();
-	}
-
-	/*
-	 * Starts hosting a network game.
-	 */
-	private void hostGame() {
-
-		/*
-		 * Don't allow multiple network connections.
-		 */
-		if (server != null
-				|| client != null) {
-
-			return;
-		}
-
-		int port;
-
-		try {
-
-			port = Integer.parseInt(
-					portField.getText().trim());
-
-		} catch (NumberFormatException e) {
-
-			showError(
-					"Invalid Port",
-					"Please enter a valid port number.");
-
-			return;
-		}
-
-		/*
-		 * Port must be in the valid TCP range.
-		 */
-		if (port < 1 || port > 65535) {
-
-			showError(
-					"Invalid Port",
-					"Port must be between 1 and 65535.");
-
-			return;
-		}
-
-		try {
-
-			/*
-			 * This copy is now being used for
-			 * network play.
-			 */
-			networkGame = true;
-
-			/*
-			 * Create server.
-			 */
-			server = new GameServer(game);
-
-			/*
-			 * The host controls Player 1.
-			 *
-			 * Do not set this until the server is
-			 * actually connected, otherwise Player 1
-			 * could move before Player 2 joins.
-			 */
-			game.setLocalPlayer(
-					Player.PLAYER_TWO);
-
-			/*
-			 * Send successful local moves to
-			 * the connected client.
-			 */
-			game.setMoveMade(
-					move -> {
+    private void hostLanGame() {
 
-						if (server != null
-								&& server.isConnected()) {
-
-							server.sendMove(move);
-						}
-					});
+        if (networkMode
+                != NetworkMode.OFFLINE) {
 
-			game.setPassMade(
-					() -> {
+            return;
+        }
 
-						if (server != null
-								&& server.isConnected()) {
+        Integer port =
+                readPort();
 
-							server.sendPass();
-						}
-					});
+        if (port == null) {
+            return;
+        }
 
-			/*
-			 * Handle connection changes.
-			 */
-			server.setConnectionChanged(
-					() -> {
+        try {
 
-						if (server != null
-								&& server.isConnected()) {
+            networkMode =
+                    NetworkMode.LAN_HOST;
 
-							/*
-							 * Host now controls Player 1.
-							 */
-							game.setLocalPlayer(
-									Player.PLAYER_ONE);
+            game.setNetworkReady(
+                    false);
 
-							networkStatusLabel.setText(
-									"Status: Player 2 connected");
+            game.setLocalPlayer(
+                    Player.PLAYER_ONE);
 
-							hostButton.setDisable(true);
-							joinButton.setDisable(true);
+            server =
+                    new GameServer(game);
 
-							hostField.setDisable(true);
-							portField.setDisable(true);
+            /*
+             * Local move → LAN.
+             */
+            game.setMoveMade(
+                    move -> {
 
-							updateDisplay();
+                        if (server != null
+                                && server.isConnected()) {
 
-						} else {
+                            server.sendMove(
+                                    move);
+                        }
+                    });
 
-							networkStatusLabel.setText(
-									"Status: Player 2 disconnected");
+            /*
+             * Local pass → LAN.
+             */
+            game.setPassMade(
+                    () -> {
 
-							updateDisplay();
-						}
-					});
+                        if (server != null
+                                && server.isConnected()) {
 
-			/*
-			 * Start server.
-			 */
-			server.start(port);
+                            server.sendPass();
+                        }
+                    });
 
-			networkStatusLabel.setText(
-					"Status: Hosting - waiting for Player 2...");
+            server.setConnectionChanged(
+                    () -> {
 
-			/*
-			 * Disable network setup controls while
-			 * waiting for a connection.
-			 */
-			hostButton.setDisable(true);
-			joinButton.setDisable(true);
+                        if (server != null
+                                && server.isConnected()) {
 
-			hostField.setDisable(true);
-			portField.setDisable(true);
+                            game.setNetworkReady(
+                                    true);
 
-			updateDisplay();
+                            networkStatusLabel.setText(
+                                    "Status: LAN Player 2 connected");
 
-		} catch (IOException e) {
+                        } else {
 
-			server = null;
+                            game.setNetworkReady(
+                                    false);
 
-			networkGame = false;
+                            networkStatusLabel.setText(
+                                    "Status: LAN opponent disconnected");
+                        }
 
-			/*
-			 * Restore normal offline control.
-			 */
-			game.setLocalPlayer(
-					Player.PLAYER_ONE);
+                        updateDisplay();
+                    });
 
-			showError(
-					"Unable to Host Game",
-					e.getMessage());
-		}
-	}
+            server.start(
+                    port);
 
-	/*
-	 * Joins an existing network game.
-	 */
-	private void joinGame() {
+            networkStatusLabel.setText(
+                    "Status: Hosting LAN - waiting for Player 2");
 
-		String host = hostField.getText().trim();
+            roomCodeLabel.setText(
+                    "Room: LAN");
 
-		if (host.isEmpty()) {
+            disableConnectionControls();
 
-			showError(
-					"Invalid Host",
-					"Please enter the host IP address.");
+            updateDisplay();
 
-			return;
-		}
+        } catch (IOException e) {
 
-		int port;
+            server = null;
 
-		try {
+            networkMode =
+                    NetworkMode.OFFLINE;
 
-			port = Integer.parseInt(
-					portField.getText().trim());
+            game.setNetworkReady(
+                    true);
 
-		} catch (NumberFormatException e) {
+            enableConnectionControls();
 
-			showError(
-					"Invalid Port",
-					"Please enter a valid port number.");
+            showError(
+                    "Unable to Host LAN Game",
+                    e.getMessage());
+        }
+    }
 
-			return;
-		}
+    /*
+     * =========================================
+     * LAN JOIN
+     * =========================================
+     */
 
-		if (port < 1 || port > 65535) {
+    private void joinLanGame() {
 
-			showError(
-					"Invalid Port",
-					"Port must be between 1 and 65535.");
+        if (networkMode
+                != NetworkMode.OFFLINE) {
 
-			return;
-		}
+            return;
+        }
 
-		try {
+        String host =
+                hostField
+                        .getText()
+                        .trim();
 
-			/*
-			 * This copy is now being used for
-			 * network play.
-			 */
-			networkGame = true;
+        if (host.isEmpty()) {
 
-			/*
-			 * Create client.
-			 */
-			client = new GameClient(game);
+            showError(
+                    "Invalid Host",
+                    "Enter the LAN host IP address.");
 
-			/*
-			 * While waiting for the connection,
-			 * temporarily make Player 2 the local
-			 * player so Player 1 cannot make the
-			 * opening move before the connection.
-			 */
-			game.setLocalPlayer(
-					Player.PLAYER_TWO);
+            return;
+        }
 
-			/*
-			 * Send successful local moves to
-			 * the host.
-			 */
-			game.setMoveMade(
-					move -> {
+        Integer port =
+                readPort();
 
-						if (client != null
-								&& client.isConnected()) {
+        if (port == null) {
+            return;
+        }
 
-							client.sendMove(move);
-						}
-					});
+        try {
 
-			game.setPassMade(
-					() -> {
+            networkMode =
+                    NetworkMode.LAN_CLIENT;
 
-						if (client != null
-								&& client.isConnected()) {
+            game.setNetworkReady(
+                    false);
 
-							client.sendPass();
-						}
-					});
+            client =
+                    new GameClient(game);
 
-			/*
-			 * Handle connection changes.
-			 */
-			client.setConnectionChanged(
-					() -> {
+            game.setMoveMade(
+                    move -> {
 
-						if (client != null
-								&& client.isConnected()) {
+                        if (client != null
+                                && client.isConnected()) {
 
-							/*
-							 * Client controls Player 2.
-							 */
-							game.setLocalPlayer(
-									Player.PLAYER_TWO);
+                            client.sendMove(
+                                    move);
+                        }
+                    });
 
-							networkStatusLabel.setText(
-									"Status: Connected to Player 1");
+            game.setPassMade(
+                    () -> {
 
-							hostButton.setDisable(true);
-							joinButton.setDisable(true);
+                        if (client != null
+                                && client.isConnected()) {
 
-							hostField.setDisable(true);
-							portField.setDisable(true);
+                            client.sendPass();
+                        }
+                    });
 
-							updateDisplay();
+            client.setConnectionChanged(
+                    () -> {
 
-						} else {
+                        if (client != null
+                                && client.isConnected()) {
 
-							networkStatusLabel.setText(
-									"Status: Disconnected");
+                            game.setNetworkReady(
+                                    true);
 
-							updateDisplay();
-						}
-					});
+                            networkStatusLabel.setText(
+                                    "Status: Connected to LAN host");
 
-			/*
-			 * Show connection status before
-			 * attempting the connection.
-			 */
-			networkStatusLabel.setText(
-					"Status: Connecting...");
+                        } else {
 
-			updateDisplay();
+                            game.setNetworkReady(
+                                    false);
 
-			/*
-			 * Connect to the host.
-			 */
-			client.connect(
-					host,
-					port);
+                            networkStatusLabel.setText(
+                                    "Status: LAN connection lost");
+                        }
 
-		} catch (IOException e) {
+                        updateDisplay();
+                    });
 
-			client = null;
+            networkStatusLabel.setText(
+                    "Status: Connecting to LAN host...");
 
-			networkGame = false;
+            roomCodeLabel.setText(
+                    "Room: LAN");
 
-			/*
-			 * Restore normal offline control.
-			 */
-			game.setLocalPlayer(
-					Player.PLAYER_ONE);
+            disableConnectionControls();
 
-			networkStatusLabel.setText(
-					"Status: Offline");
+            client.connect(
+                    host,
+                    port);
 
-			showError(
-					"Unable to Join Game",
-					e.getMessage());
+            game.setLocalPlayer(
+                    Player.PLAYER_TWO);
 
-			updateDisplay();
-		}
-	}
+            updateDisplay();
 
-	/*
-	 * Stops all network connections.
-	 */
-	private void stopNetworking() {
+        } catch (IOException e) {
 
-		if (server != null) {
+            client = null;
 
-			server.stop();
+            networkMode =
+                    NetworkMode.OFFLINE;
 
-			server = null;
-		}
+            game.setNetworkReady(
+                    true);
 
-		if (client != null) {
+            enableConnectionControls();
 
-			client.disconnect();
+            networkStatusLabel.setText(
+                    "Status: Offline");
 
-			client = null;
-		}
+            roomCodeLabel.setText(
+                    "Room: -");
 
-		networkGame = false;
+            showError(
+                    "Unable to Join LAN Game",
+                    e.getMessage());
 
-		/*
-		 * Return this copy of the game to
-		 * normal offline Player 1 control.
-		 */
-		if (game != null) {
+            updateDisplay();
+        }
+    }
 
-			game.setLocalPlayer(
-					Player.PLAYER_ONE);
-		}
-	}
+    /*
+     * =========================================
+     * CREATE ONLINE ROOM
+     * =========================================
+     */
 
-	/*
-	 * Resets the game.
-	 */
-	private void resetGame() {
+    private void createOnlineRoom() {
 
-		/*
-		 * Disconnect from any existing network game.
-		 */
-		if (server != null) {
+        if (networkMode
+                != NetworkMode.OFFLINE) {
 
-			server.stop();
+            return;
+        }
 
-			server = null;
-		}
+        String host =
+                readHost();
 
-		if (client != null) {
+        if (host == null) {
+            return;
+        }
 
-			client.disconnect();
+        Integer port =
+                readPort();
 
-			client = null;
-		}
+        if (port == null) {
+            return;
+        }
 
-		/*
-		 * Create a completely fresh game.
-		 */
-		game = new Game();
+        try {
 
-		// ... existing reset code ...
+            prepareOnlineClient();
 
-		updateDisplay();
+            networkStatusLabel.setText(
+                    "Status: Connecting to dedicated server...");
 
-		networkStatusLabel.setText(
-				"Status: Not Connected");
+            disableConnectionControls();
 
-		/*
-		 * A reset starts a completely new game.
-		 *
-		 * Stop any existing network connection
-		 * first so the old Game object isn't still
-		 * connected to another player.
-		 */
-		stopNetworking();
+            onlineClient.connect(
+                    host,
+                    port);
 
-		/*
-		 * Create a completely fresh game.
-		 */
-		game = new Game();
+            /*
+             * Request a brand-new room after
+             * TCP connection succeeds.
+             */
+            onlineClient.createRoom();
 
-		networkGame = false;
+        } catch (IOException e) {
 
-		/*
-		 * Get new board.
-		 */
-		Board newBoard = game.getBoard();
+            onlineConnectionFailed(
+                    e);
+        }
+    }
 
-		newBoard.setAlignment(
-				Pos.CENTER);
+    /*
+     * =========================================
+     * JOIN ONLINE ROOM
+     * =========================================
+     */
 
-		/*
-		 * Replace the board in the layout.
-		 */
-		VBox root = (VBox) board.getParent();
+    private void joinOnlineRoom() {
 
-		int boardIndex = root.getChildren()
-				.indexOf(board);
+        if (networkMode
+                != NetworkMode.OFFLINE) {
 
-		root.getChildren()
-				.set(
-						boardIndex,
-						newBoard);
+            return;
+        }
 
-		/*
-		 * Update board reference.
-		 */
-		board = newBoard;
+        String host =
+                readHost();
 
-		VBox.setVgrow(
-				board,
-				Priority.ALWAYS);
+        if (host == null) {
+            return;
+        }
 
-		/*
-		 * Register callback for new game.
-		 */
-		registerGameCallback();
+        Integer port =
+                readPort();
 
-		/*
-		 * Restore network controls.
-		 */
-		hostButton.setDisable(false);
-		joinButton.setDisable(false);
-
-		hostField.setDisable(false);
-		portField.setDisable(false);
-
-		/*
-		 * Restore default host address.
-		 */
-		hostField.setText(
-				"127.0.0.1");
-
-		/*
-		 * Restore default port.
-		 */
-		portField.setText(
-				"5000");
-
-		networkStatusLabel.setText(
-				"Status: Offline");
-
-		/*
-		 * Update UI.
-		 */
-		updateDisplay();
-	}
+        if (port == null) {
+            return;
+        }
 
-	/*
-	 * Registers the callback used by Game to
-	 * update the UI.
-	 */
-	private void registerGameCallback() {
+        String roomCode =
+                roomCodeField
+                        .getText()
+                        .trim()
+                        .toUpperCase();
 
-		game.setGameStateChanged(
-				this::updateDisplay);
-	}
+        if (roomCode.isEmpty()) {
 
-	/*
-	 * Determines whether this copy of the game
-	 * currently has an active network connection.
-	 */
-	private boolean isNetworkConnected() {
+            showError(
+                    "Room Code Required",
+                    "Enter the room code created by Player 1.");
 
-		return (server != null
-				&& server.isConnected())
-				|| (client != null
-						&& client.isConnected());
-	}
+            return;
+        }
 
-	/*
-	 * Updates all UI elements.
-	 */
-	private void updateDisplay() {
+        try {
 
-		boolean networkGame = server != null
-				|| client != null;
+            prepareOnlineClient();
 
-		resetButton.setDisable(networkGame);
+            networkStatusLabel.setText(
+                    "Status: Connecting to dedicated server...");
 
-		/*
-		 * Update territory counts.
-		 */
-		int playerOneCells = game.getBoard()
-				.countClaimedCells(
-						Player.PLAYER_ONE);
+            disableConnectionControls();
 
-		int playerTwoCells = game.getBoard()
-				.countClaimedCells(
-						Player.PLAYER_TWO);
+            onlineClient.connect(
+                    host,
+                    port);
 
-		int totalCells = game.getBoard().getSize()
-				* game.getBoard().getSize();
+            onlineClient.joinRoom(
+                    roomCode);
 
-		/*
-		 * Player 1 territory display.
-		 */
-		playerOneTerritoryLabel.setText(
-				"PLAYER 1 CELLS: "
-						+ playerOneCells
-						+ " / "
-						+ totalCells);
+        } catch (IOException e) {
 
-		playerOneTerritoryLabel.setTextFill(
-				javafx.scene.paint.Color.rgb(
-						28,
-						50,
-						255));
+            onlineConnectionFailed(
+                    e);
+        }
+    }
 
-		playerOneTerritoryLabel.setStyle(
-				"-fx-font-size: 16px;" +
-						"-fx-font-weight: bold;" +
-						"-fx-padding: 4px;");
+    /*
+     * =========================================
+     * PREPARE ONLINE CLIENT
+     * =========================================
+     */
 
-		/*
-		 * Player 2 territory display.
-		 */
-		playerTwoTerritoryLabel.setText(
-				"PLAYER 2 CELLS: "
-						+ playerTwoCells
-						+ " / "
-						+ totalCells);
+    private void prepareOnlineClient() {
 
-		playerTwoTerritoryLabel.setTextFill(
-				javafx.scene.paint.Color.rgb(
-						64,
-						160,
-						86));
+        networkMode =
+                NetworkMode.ONLINE;
 
-		playerTwoTerritoryLabel.setStyle(
-				"-fx-font-size: 16px;" +
-						"-fx-font-weight: bold;" +
-						"-fx-padding: 4px;");
+        gameOverReported =
+                false;
 
-		/*
-		 * Game over display.
-		 */
-		if (game.isGameOver()) {
+        /*
+         * Nobody can play until START arrives.
+         */
+        game.setNetworkReady(
+                false);
 
-			Player winner = game.getWinner();
+        onlineClient =
+                new OnlineGameClient(
+                        game);
 
-			String winnerText;
+        /*
+         * -------------------------------------
+         * LOCAL ACTIONS
+         * -------------------------------------
+         */
 
-			String backgroundColor;
+        game.setMoveMade(
+                move -> {
 
-			String winReason;
+                    if (onlineClient != null
+                            && onlineClient.isConnected()) {
 
-			int majority = totalCells / 2 + 1;
+                        onlineClient.sendMove(
+                                move);
+                    }
+                });
 
-			if (winner == Player.PLAYER_ONE) {
+        game.setPassMade(
+                () -> {
 
-				winnerText = "PLAYER 1 WINS!";
+                    if (onlineClient != null
+                            && onlineClient.isConnected()) {
 
-				backgroundColor = "#1C32FF";
+                        onlineClient.sendPass();
+                    }
+                });
 
-				if (playerOneCells >= majority) {
+        /*
+         * -------------------------------------
+         * TCP CONNECTION
+         * -------------------------------------
+         */
 
-					winReason = "Territory: "
-							+ playerOneCells
-							+ " / "
-							+ totalCells;
+        onlineClient.setConnectionChanged(
+                () -> {
 
-				} else {
+                    if (onlineClient != null
+                            && onlineClient.isConnected()) {
 
-					winReason = "All Player 2 pieces eliminated";
-				}
+                        networkStatusLabel.setText(
+                                "Status: Connected to dedicated server");
 
-			} else {
+                    } else {
 
-				winnerText = "PLAYER 2 WINS!";
+                        game.setNetworkReady(
+                                false);
 
-				backgroundColor = "#40A056";
+                        networkStatusLabel.setText(
+                                "Status: Dedicated server disconnected");
+                    }
 
-				if (playerTwoCells >= majority) {
+                    updateDisplay();
+                });
 
-					winReason = "Territory: "
-							+ playerTwoCells
-							+ " / "
-							+ totalCells;
+        /*
+         * -------------------------------------
+         * ROOM CREATED
+         * -------------------------------------
+         */
 
-				} else {
+        onlineClient.setRoomCreated(
+                roomCode -> {
 
-					winReason = "All Player 1 pieces eliminated";
-				}
-			}
+                    roomCodeLabel.setText(
+                            "Room: "
+                                    + roomCode);
 
-			turnLabel.setText(
-					winnerText
-							+ "\n"
-							+ winReason);
+                    roomCodeField.setText(
+                            roomCode);
 
-			turnLabel.setTextFill(
-					javafx.scene.paint.Color.WHITE);
+                    networkStatusLabel.setText(
+                            "Status: Room created - waiting for Player 2");
 
-			turnLabel.setStyle(
-					"-fx-font-size: 20px;" +
-							"-fx-font-weight: bold;" +
-							"-fx-padding: 8px 40px;" +
-							"-fx-background-color: "
-							+ backgroundColor
-							+ ";");
+                    updateDisplay();
+                });
 
-			passButton.setDisable(true);
+        /*
+         * -------------------------------------
+         * ROOM JOINED
+         * -------------------------------------
+         */
 
-			return;
-		}
+        onlineClient.setRoomJoined(
+                roomCode -> {
 
-		/*
-		 * Normal turn display.
-		 */
-		Player player = game.getCurrentPlayer();
+                    roomCodeLabel.setText(
+                            "Room: "
+                                    + roomCode);
 
-		String playerText;
+                    roomCodeField.setText(
+                            roomCode);
 
-		String backgroundColor;
+                    networkStatusLabel.setText(
+                            "Status: Joined room - starting game...");
 
-		if (player == Player.PLAYER_ONE) {
+                    updateDisplay();
+                });
 
-			backgroundColor = "#1C32FF";
+        /*
+         * -------------------------------------
+         * START
+         * -------------------------------------
+         */
 
-		} else {
+        onlineClient.setGameStarted(
+                () -> {
 
-			backgroundColor = "#40A056";
-		}
+                    game.setNetworkReady(
+                            true);
 
-		/*
-		 * Network waiting state.
-		 */
-		if (networkGame
-				&& !isNetworkConnected()) {
+                    networkStatusLabel.setText(
+                            "Status: Online game started");
 
-			playerText = "WAITING FOR OPPONENT\n"
-					+ "Moves are disabled";
+                    updateDisplay();
+                });
 
-		} else if (game.isLocalPlayersTurn()) {
+        /*
+         * -------------------------------------
+         * ROOM ERRORS
+         * -------------------------------------
+         */
 
-			playerText = player == Player.PLAYER_ONE
-					? "PLAYER 1'S TURN\n"
-					: "PLAYER 2'S TURN\n";
+        onlineClient.setRoomNotFound(
+                () -> {
 
-		} else {
+                    showError(
+                            "Room Not Found",
+                            "No room exists with that code.");
 
-			playerText = "OPPONENT'S TURN\n";
-		}
+                    returnToOffline();
+                });
 
-		playerText += "Moves remaining: "
-				+ game.getMovesRemaining();
+        onlineClient.setRoomFull(
+                () -> {
 
-		turnLabel.setText(
-				playerText);
+                    showError(
+                            "Room Full",
+                            "That room already has two players.");
 
-		turnLabel.setTextFill(
-				javafx.scene.paint.Color.WHITE);
+                    returnToOffline();
+                });
 
-		turnLabel.setStyle(
-				"-fx-font-size: 18px;" +
-						"-fx-font-weight: bold;" +
-						"-fx-padding: 8px 40px;" +
-						"-fx-background-color: "
-						+ backgroundColor
-						+ ";");
+        onlineClient.setRoomUnavailable(
+                () -> {
 
-		/*
-		 * The player can only pass if:
-		 *
-		 * 1. The game isn't over.
-		 * 2. It is this computer's turn.
-		 * 3. At least one move remains.
-		 */
-		passButton.setDisable(
-				game.isGameOver()
-						|| !game.isLocalPlayersTurn()
-						|| game.getMovesRemaining() <= 0);
-	}
+                    showError(
+                            "Room Unavailable",
+                            "That room has already started or finished.");
 
-	public boolean isGameOver() {
+                    returnToOffline();
+                });
 
-		return game.isGameOver();
-	}
+        /*
+         * -------------------------------------
+         * OPPONENT DISCONNECTED
+         * -------------------------------------
+         */
 
-	public Player getWinner() {
+        onlineClient.setOpponentDisconnected(
+                () -> {
 
-		return game.getWinner();
-	}
+                    game.setNetworkReady(
+                            false);
 
-	public int getPlayerOneClaimedCells() {
+                    networkStatusLabel.setText(
+                            "Status: Opponent disconnected");
 
-		return board.countClaimedCells(
-				Player.PLAYER_ONE);
-	}
+                    updateDisplay();
+                });
 
-	public int getPlayerTwoClaimedCells() {
+        /*
+         * -------------------------------------
+         * ROOM FINISHED
+         * -------------------------------------
+         */
 
-		return board.countClaimedCells(
-				Player.PLAYER_TWO);
-	}
+        onlineClient.setRoomFinished(
+                () -> {
 
-	public static void main(String[] args) {
+                    networkStatusLabel.setText(
+                            "Status: Match finished");
 
-		launch(args);
-	}
+                    updateDisplay();
+                });
+    }
+
+    /*
+     * =========================================
+     * ONLINE FAILURE
+     * =========================================
+     */
+
+    private void onlineConnectionFailed(
+            IOException e) {
+
+        if (onlineClient != null) {
+
+            onlineClient.disconnect();
+
+            onlineClient = null;
+        }
+
+        networkMode =
+                NetworkMode.OFFLINE;
+
+        game.setNetworkReady(
+                true);
+
+        game.setLocalPlayer(
+                Player.PLAYER_ONE);
+
+        game.setMoveMade(
+                null);
+
+        game.setPassMade(
+                null);
+
+        enableConnectionControls();
+
+        networkStatusLabel.setText(
+                "Status: Offline");
+
+        roomCodeLabel.setText(
+                "Room: -");
+
+        showError(
+                "Online Connection Failed",
+                e.getMessage());
+
+        updateDisplay();
+    }
+
+    /*
+     * =========================================
+     * RETURN TO OFFLINE
+     * =========================================
+     */
+
+    private void returnToOffline() {
+
+        if (onlineClient != null) {
+
+            onlineClient.disconnect();
+
+            onlineClient = null;
+        }
+
+        networkMode =
+                NetworkMode.OFFLINE;
+
+        game.setNetworkReady(
+                true);
+
+        game.setLocalPlayer(
+                Player.PLAYER_ONE);
+
+        game.setMoveMade(
+                null);
+
+        game.setPassMade(
+                null);
+
+        enableConnectionControls();
+
+        networkStatusLabel.setText(
+                "Status: Offline");
+
+        roomCodeLabel.setText(
+                "Room: -");
+
+        updateDisplay();
+    }
+
+    /*
+     * =========================================
+     * NETWORK UTILITIES
+     * =========================================
+     */
+
+    private String readHost() {
+
+        String host =
+                hostField
+                        .getText()
+                        .trim();
+
+        if (host.isEmpty()) {
+
+            showError(
+                    "Invalid Host",
+                    "Enter the server address.");
+
+            return null;
+        }
+
+        return host;
+    }
+
+    private Integer readPort() {
+
+        try {
+
+            int port =
+                    Integer.parseInt(
+                            portField
+                                    .getText()
+                                    .trim());
+
+            if (port < 1
+                    || port > 65535) {
+
+                showError(
+                        "Invalid Port",
+                        "Port must be between 1 and 65535.");
+
+                return null;
+            }
+
+            return port;
+
+        } catch (NumberFormatException e) {
+
+            showError(
+                    "Invalid Port",
+                    "Enter a valid port number.");
+
+            return null;
+        }
+    }
+
+    private void disableConnectionControls() {
+
+        hostLanButton.setDisable(
+                true);
+
+        joinLanButton.setDisable(
+                true);
+
+        createOnlineRoomButton.setDisable(
+                true);
+
+        joinOnlineRoomButton.setDisable(
+                true);
+
+        hostField.setDisable(
+                true);
+
+        portField.setDisable(
+                true);
+
+        roomCodeField.setDisable(
+                true);
+    }
+
+    private void enableConnectionControls() {
+
+        hostLanButton.setDisable(
+                false);
+
+        joinLanButton.setDisable(
+                false);
+
+        createOnlineRoomButton.setDisable(
+                false);
+
+        joinOnlineRoomButton.setDisable(
+                false);
+
+        hostField.setDisable(
+                false);
+
+        portField.setDisable(
+                false);
+
+        roomCodeField.setDisable(
+                false);
+    }
+
+    /*
+     * =========================================
+     * STOP NETWORKING
+     * =========================================
+     */
+
+    private void stopNetworking() {
+
+        if (server != null) {
+
+            server.stop();
+
+            server = null;
+        }
+
+        if (client != null) {
+
+            client.disconnect();
+
+            client = null;
+        }
+
+        if (onlineClient != null) {
+
+            onlineClient.disconnect();
+
+            onlineClient = null;
+        }
+
+        networkMode =
+                NetworkMode.OFFLINE;
+
+        if (game != null) {
+
+            game.setNetworkReady(
+                    true);
+
+            game.setLocalPlayer(
+                    Player.PLAYER_ONE);
+
+            game.setMoveMade(
+                    null);
+
+            game.setPassMade(
+                    null);
+        }
+    }
+
+    /*
+     * =========================================
+     * RESET
+     * =========================================
+     */
+
+    private void resetGame() {
+
+        stopNetworking();
+
+        game =
+                new Game();
+
+        gameOverReported =
+                false;
+
+        Board newBoard =
+                game.getBoard();
+
+        newBoard.setAlignment(
+                Pos.CENTER);
+
+        VBox root =
+                (VBox) board.getParent();
+
+        int boardIndex =
+                root.getChildren()
+                        .indexOf(board);
+
+        root.getChildren()
+                .set(
+                        boardIndex,
+                        newBoard);
+
+        board =
+                newBoard;
+
+        VBox.setVgrow(
+                board,
+                Priority.ALWAYS);
+
+        registerGameCallback();
+
+        enableConnectionControls();
+
+        networkStatusLabel.setText(
+                "Status: Offline");
+
+        roomCodeLabel.setText(
+                "Room: -");
+
+        roomCodeField.clear();
+
+        updateDisplay();
+    }
+
+    /*
+     * =========================================
+     * GAME CALLBACK
+     * =========================================
+     */
+
+    private void registerGameCallback() {
+
+        game.setGameStateChanged(
+                this::updateDisplay);
+    }
+
+    /*
+     * =========================================
+     * DISPLAY
+     * =========================================
+     */
+
+    private void updateDisplay() {
+
+        int playerOneCells =
+                game.getBoard()
+                        .countClaimedCells(
+                                Player.PLAYER_ONE);
+
+        int playerTwoCells =
+                game.getBoard()
+                        .countClaimedCells(
+                                Player.PLAYER_TWO);
+
+        int totalCells =
+                game.getBoard().getSize()
+                        * game.getBoard().getSize();
+
+        /*
+         * -------------------------------------
+         * TERRITORY COUNTERS
+         * -------------------------------------
+         */
+
+        playerOneTerritoryLabel.setText(
+                "PLAYER 1 CELLS: "
+                        + playerOneCells
+                        + " / "
+                        + totalCells);
+
+        playerOneTerritoryLabel.setTextFill(
+                javafx.scene.paint.Color.rgb(
+                        28,
+                        50,
+                        255));
+
+        playerOneTerritoryLabel.setStyle(
+                "-fx-font-size: 16px;" +
+                        "-fx-font-weight: bold;" +
+                        "-fx-padding: 4px;");
+
+        playerTwoTerritoryLabel.setText(
+                "PLAYER 2 CELLS: "
+                        + playerTwoCells
+                        + " / "
+                        + totalCells);
+
+        playerTwoTerritoryLabel.setTextFill(
+                javafx.scene.paint.Color.rgb(
+                        64,
+                        160,
+                        86));
+
+        playerTwoTerritoryLabel.setStyle(
+                "-fx-font-size: 16px;" +
+                        "-fx-font-weight: bold;" +
+                        "-fx-padding: 4px;");
+
+        /*
+         * -------------------------------------
+         * GAME OVER
+         * -------------------------------------
+         */
+
+        if (game.isGameOver()) {
+
+            /*
+             * Tell the dedicated server that the
+             * room has ended normally.
+             */
+            if (networkMode == NetworkMode.ONLINE
+                    && onlineClient != null
+                    && onlineClient.isConnected()
+                    && !gameOverReported) {
+
+                gameOverReported =
+                        true;
+
+                onlineClient.sendGameOver();
+            }
+
+            Player winner =
+                    game.getWinner();
+
+            String winnerText;
+
+            String backgroundColor;
+
+            String winReason;
+
+            int majority =
+                    totalCells / 2 + 1;
+
+            if (winner
+                    == Player.PLAYER_ONE) {
+
+                winnerText =
+                        "PLAYER 1 WINS!";
+
+                backgroundColor =
+                        "#1C32FF";
+
+                if (playerOneCells
+                        >= majority) {
+
+                    winReason =
+                            "Territory: "
+                                    + playerOneCells
+                                    + " / "
+                                    + totalCells;
+
+                } else {
+
+                    winReason =
+                            "All Player 2 pieces eliminated";
+                }
+
+            } else {
+
+                winnerText =
+                        "PLAYER 2 WINS!";
+
+                backgroundColor =
+                        "#40A056";
+
+                if (playerTwoCells
+                        >= majority) {
+
+                    winReason =
+                            "Territory: "
+                                    + playerTwoCells
+                                    + " / "
+                                    + totalCells;
+
+                } else {
+
+                    winReason =
+                            "All Player 1 pieces eliminated";
+                }
+            }
+
+            turnLabel.setText(
+                    winnerText
+                            + "\n"
+                            + winReason);
+
+            turnLabel.setTextFill(
+                    javafx.scene.paint.Color.WHITE);
+
+            turnLabel.setStyle(
+                    "-fx-font-size: 20px;" +
+                            "-fx-font-weight: bold;" +
+                            "-fx-padding: 8px 40px;" +
+                            "-fx-background-color: "
+                            + backgroundColor
+                            + ";");
+
+            passButton.setDisable(
+                    true);
+
+            return;
+        }
+
+        /*
+         * -------------------------------------
+         * NORMAL TURN DISPLAY
+         * -------------------------------------
+         */
+
+        Player player =
+                game.getCurrentPlayer();
+
+        String backgroundColor;
+
+        if (player
+                == Player.PLAYER_ONE) {
+
+            backgroundColor =
+                    "#1C32FF";
+
+        } else {
+
+            backgroundColor =
+                    "#40A056";
+        }
+
+        String playerText;
+
+        /*
+         * Network game waiting for opponent.
+         */
+        if (networkMode
+                != NetworkMode.OFFLINE
+                && !game.isNetworkReady()) {
+
+            playerText =
+                    "WAITING FOR OPPONENT\n";
+
+        } else if (
+                game.isLocalPlayersTurn()) {
+
+            if (player
+                    == Player.PLAYER_ONE) {
+
+                playerText =
+                        "PLAYER 1'S TURN\n";
+
+            } else {
+
+                playerText =
+                        "PLAYER 2'S TURN\n";
+            }
+
+        } else {
+
+            playerText =
+                    "OPPONENT'S TURN\n";
+        }
+
+        playerText +=
+                "Moves remaining: "
+                        + game.getMovesRemaining();
+
+        turnLabel.setText(
+                playerText);
+
+        turnLabel.setTextFill(
+                javafx.scene.paint.Color.WHITE);
+
+        turnLabel.setStyle(
+                "-fx-font-size: 18px;" +
+                        "-fx-font-weight: bold;" +
+                        "-fx-padding: 8px 40px;" +
+                        "-fx-background-color: "
+                        + backgroundColor
+                        + ";");
+
+        /*
+         * Pass only when this player can act.
+         */
+        boolean canPass =
+                game.isNetworkReady()
+                        && game.isLocalPlayersTurn()
+                        && game.getMovesRemaining() > 0;
+
+        passButton.setDisable(
+                !canPass);
+    }
+
+    /*
+     * =========================================
+     * ERROR
+     * =========================================
+     */
+
+    private void showError(
+            String title,
+            String message) {
+
+        if (message == null
+                || message.isBlank()) {
+
+            message =
+                    "An unknown error occurred.";
+        }
+
+        Alert alert =
+                new Alert(
+                        Alert.AlertType.ERROR,
+                        message,
+                        ButtonType.OK);
+
+        alert.setTitle(
+                title);
+
+        alert.setHeaderText(
+                null);
+
+        alert.showAndWait();
+    }
+
+    /*
+     * =========================================
+     * EXISTING GETTERS
+     * =========================================
+     */
+
+    public boolean isGameOver() {
+
+        return game.isGameOver();
+    }
+
+    public Player getWinner() {
+
+        return game.getWinner();
+    }
+
+    public int getPlayerOneClaimedCells() {
+
+        return board.countClaimedCells(
+                Player.PLAYER_ONE);
+    }
+
+    public int getPlayerTwoClaimedCells() {
+
+        return board.countClaimedCells(
+                Player.PLAYER_TWO);
+    }
+
+    /*
+     * =========================================
+     * MAIN
+     * =========================================
+     */
+
+    public static void main(
+            String[] args) {
+
+        launch(args);
+    }
 }
