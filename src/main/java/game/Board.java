@@ -64,7 +64,7 @@ public class Board extends GridPane {
         if (game == null) {
             return;
         }
-        
+
         /*
          * Don't allow interaction after the game ends.
          */
@@ -128,7 +128,7 @@ public class Board extends GridPane {
                     cell.getRow(),
                     cell.getColumn());
 
-            boolean moved = game.movePiece(move);
+            boolean moved = game.requestMove(move);
 
             if (moved) {
 

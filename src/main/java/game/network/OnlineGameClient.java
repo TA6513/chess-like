@@ -50,6 +50,10 @@ public class OnlineGameClient {
 
 	private Consumer<String> roomJoined;
 
+	private Consumer<String> actionRejected;
+
+	private Consumer<String> gameOverReceived;
+
 	private Runnable roomNotFound;
 
 	private Runnable roomFull;
@@ -146,7 +150,7 @@ public class OnlineGameClient {
 	 * -----------------------------------------
 	 */
 
-	public void sendMove(
+	public void sendMoveRequest(
 			Move move) {
 
 		if (move == null) {
@@ -154,13 +158,20 @@ public class OnlineGameClient {
 		}
 
 		sendMessage(
-				move.serialize());
+				"REQUEST_MOVE "
+						+ move.getSourceRow()
+						+ " "
+						+ move.getSourceColumn()
+						+ " "
+						+ move.getDestinationRow()
+						+ " "
+						+ move.getDestinationColumn());
 	}
 
-	public void sendPass() {
+	public void sendPassRequest() {
 
 		sendMessage(
-				"PASS");
+				"REQUEST_PASS");
 	}
 
 	public void sendGameOver() {
@@ -370,23 +381,37 @@ public class OnlineGameClient {
 		 * -------------------------------------
 		 */
 
+		/*
+		 * Server-approved move.
+		 *
+		 * APPLY_MOVE 10 0 9 0
+		 */
 		if (message.startsWith(
-				"MOVE ")) {
+				"APPLY_MOVE ")) {
 
 			try {
 
+				/*
+				 * Move.deserialize expects a message
+				 * beginning with MOVE.
+				 */
+				String moveMessage = "MOVE "
+						+ message.substring(
+								"APPLY_MOVE ".length());
+
 				Move move = Move.deserialize(
-						message);
+						moveMessage);
 
 				Platform.runLater(() -> {
 
-					boolean accepted = game.applyRemoteMove(
+					boolean accepted = game.applyAuthoritativeMove(
 							move);
 
 					if (!accepted) {
 
 						System.err.println(
-								"Remote move rejected: "
+								"Authoritative move could "
+										+ "not be applied locally: "
 										+ move);
 					}
 				});
@@ -394,7 +419,7 @@ public class OnlineGameClient {
 			} catch (IllegalArgumentException e) {
 
 				System.err.println(
-						"Invalid MOVE message: "
+						"Invalid APPLY_MOVE message: "
 								+ message);
 			}
 
@@ -408,16 +433,17 @@ public class OnlineGameClient {
 		 */
 
 		if (message.equals(
-				"PASS")) {
+				"APPLY_PASS")) {
 
 			Platform.runLater(() -> {
 
-				boolean accepted = game.applyRemotePass();
+				boolean accepted = game.applyAuthoritativePass();
 
 				if (!accepted) {
 
 					System.err.println(
-							"Remote PASS was rejected.");
+							"Authoritative PASS could not "
+									+ "be applied locally.");
 				}
 			});
 
@@ -450,6 +476,44 @@ public class OnlineGameClient {
 
 			runLater(
 					roomFinished);
+
+			return;
+		}
+
+		if (message.startsWith(
+				"ACTION_REJECTED ")) {
+
+			String reason = message.substring(
+					"ACTION_REJECTED ".length())
+					.trim();
+
+			Platform.runLater(() -> {
+
+				if (actionRejected != null) {
+
+					actionRejected.accept(
+							reason);
+				}
+			});
+
+			return;
+		}
+
+		if (message.startsWith(
+				"GAME_OVER ")) {
+
+			String result = message.substring(
+					"GAME_OVER ".length())
+					.trim();
+
+			Platform.runLater(() -> {
+
+				if (gameOverReceived != null) {
+
+					gameOverReceived.accept(
+							result);
+				}
+			});
 
 			return;
 		}
@@ -565,6 +629,18 @@ public class OnlineGameClient {
 			Runnable callback) {
 
 		connectionChanged = callback;
+	}
+
+	public void setActionRejected(
+			Consumer<String> callback) {
+
+		actionRejected = callback;
+	}
+
+	public void setGameOverReceived(
+			Consumer<String> callback) {
+
+		gameOverReceived = callback;
 	}
 
 	public void setGameStarted(

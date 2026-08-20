@@ -153,6 +153,68 @@
 
             </plugin>
 
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.5.1</version>
+
+                <executions>
+
+                    <!-- Normal game JAR -->
+                    <execution>
+                        <id>default-jar</id>
+
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                    </execution>
+
+                    <!-- Dedicated server JAR -->
+                    <execution>
+                        <id>server-jar</id>
+
+                        <phase>package</phase>
+
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+
+                        <configuration>
+
+                            <classifier>server</classifier>
+
+                            <includes>
+
+                                <!-- Shared server-safe game classes -->
+                                <include>game/Move.class</include>
+                                <include>game/Player.class</include>
+
+                                <!-- Dedicated server -->
+                                <include>
+                                    game/network/DedicatedGameServer*.class
+                                </include>
+
+                                <!-- Authoritative headless game model -->
+                                <include>
+                                    game/network/AuthoritativeGame*.class
+                                </include>
+
+                            </includes>
+
+                            <archive>
+                                <manifest>
+                                    <mainClass>
+                                        game.network.DedicatedGameServer
+                                    </mainClass>
+                                </manifest>
+                            </archive>
+
+                        </configuration>
+                    </execution>
+
+                </executions>
+            </plugin>
+
         </plugins>
 
     </build>

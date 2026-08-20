@@ -53,10 +53,10 @@ if (-not (Test-Path $JpackageExe)) {
     throw "jpackage was not found at: $JpackageExe"
 }
 
-# Set JAVA_HOME for Maven and other tools
+# Make sure Maven and other tools use this JDK.
 $env:JAVA_HOME = $JavaHome
 
-# Put the correct JDK first on PATH
+# Put this JDK first on PATH for this script.
 $env:Path = "$JavaHome\bin;$env:Path"
 
 Write-Host "JAVA_HOME:"
@@ -71,6 +71,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host ""
+
 Write-Host "javac:"
 & $JavacExe --version
 
@@ -128,14 +129,35 @@ Write-Host ""
 Write-Host "[5/7] Preparing application files..."
 Write-Host ""
 
-$JarFiles = Get-ChildItem "$TargetDir\*.jar"
+# Maven now creates both:
+#
+#   chess-like-game-X.X.X.jar
+#   chess-like-game-X.X.X-server.jar
+#
+# Only the normal game JAR should be passed
+# to jpackage.
+$JarFiles = @(
+    Get-ChildItem "$TargetDir\*.jar" |
+    Where-Object {
+        $_.Name -notlike "*-server.jar"
+    }
+)
 
 if ($JarFiles.Count -eq 0) {
     throw "No application JAR was found in $TargetDir."
 }
 
 if ($JarFiles.Count -gt 1) {
-    throw "Multiple JAR files were found in $TargetDir. Please specify which one should be packaged."
+
+    Write-Host ""
+    Write-Host "Application JAR candidates found:"
+
+    foreach ($File in $JarFiles) {
+
+        Write-Host "    $($File.Name)"
+    }
+
+    throw "Multiple application JAR files were found in $TargetDir."
 }
 
 $JarFile = $JarFiles[0]
@@ -145,30 +167,74 @@ Write-Host "Application JAR:"
 Write-Host "    $JarName"
 
 # --------------------------------------------
+# Find dedicated server JAR
+# --------------------------------------------
+
+$ServerJarFiles = @(
+    Get-ChildItem "$TargetDir\*-server.jar"
+)
+
+if ($ServerJarFiles.Count -eq 1) {
+
+    Write-Host ""
+    Write-Host "Dedicated server JAR:"
+    Write-Host "    $($ServerJarFiles[0].Name)"
+
+}
+elseif ($ServerJarFiles.Count -gt 1) {
+
+    Write-Host ""
+    Write-Host "WARNING: Multiple server JARs were found."
+
+}
+else {
+
+    Write-Host ""
+    Write-Host "WARNING: No dedicated server JAR was found."
+}
+
+# --------------------------------------------
 # Recreate temporary package directory
 # --------------------------------------------
 
 if (Test-Path $PackageDir) {
-    Remove-Item $PackageDir -Recurse -Force
+
+    Remove-Item `
+        $PackageDir `
+        -Recurse `
+        -Force
 }
 
 New-Item `
     -ItemType Directory `
     -Path "$PackageDir\lib" `
     -Force |
-    Out-Null
+Out-Null
 
+# --------------------------------------------
 # Copy application JAR
+# --------------------------------------------
 
 Copy-Item `
     $JarFile.FullName `
-    "$PackageDir\$JarName"
+    "$PackageDir\$JarName" `
+    -Force
 
+# --------------------------------------------
 # Copy JavaFX dependencies
+# --------------------------------------------
 
-$JavaFxJars = Get-ChildItem "$TargetDir\lib\*.jar"
+if (-not (Test-Path "$TargetDir\lib")) {
+
+    throw "Dependency directory was not found: $TargetDir\lib"
+}
+
+$JavaFxJars = @(
+    Get-ChildItem "$TargetDir\lib\*.jar"
+)
 
 if ($JavaFxJars.Count -eq 0) {
+
     throw "No JavaFX dependencies were found in $TargetDir\lib."
 }
 
@@ -182,14 +248,18 @@ Copy-Item `
 # --------------------------------------------
 
 if (Test-Path $ReleaseDir) {
-    Remove-Item $ReleaseDir -Recurse -Force
+
+    Remove-Item `
+        $ReleaseDir `
+        -Recurse `
+        -Force
 }
 
 New-Item `
     -ItemType Directory `
     -Path $ReleaseDir `
     -Force |
-    Out-Null
+Out-Null
 
 # --------------------------------------------
 # Create application image
@@ -199,16 +269,38 @@ Write-Host ""
 Write-Host "Creating application image..."
 Write-Host ""
 
-& $JpackageExe `
-    --type app-image `
-    --name "$ProjectName" `
-    --input "$PackageDir" `
-    --main-jar "$JarName" `
-    --main-class "$MainClass" `
-    --module-path "$TargetDir\lib" `
-    --add-modules javafx.controls,javafx.graphics,javafx.base `
-    --java-options "--enable-native-access=javafx.graphics" `
-    --dest "$ReleaseDir"
+$JpackageArgs = @(
+    "--type"
+    "app-image"
+
+    "--name"
+    $ProjectName
+
+    "--input"
+    $PackageDir
+
+    "--main-jar"
+    $JarName
+
+    "--main-class"
+    $MainClass
+
+    "--module-path"
+    "$TargetDir\lib"
+
+    "--add-modules"
+    "javafx.controls,javafx.graphics,javafx.base"
+
+    "--java-options"
+    "--enable-native-access=javafx.graphics"
+
+    "--dest"
+    $ReleaseDir
+
+    "--verbose"
+)
+
+& $JpackageExe @JpackageArgs
 
 if ($LASTEXITCODE -ne 0) {
     throw "jpackage failed."
@@ -219,12 +311,14 @@ if ($LASTEXITCODE -ne 0) {
 # --------------------------------------------
 
 if (-not (Test-Path $AppDir)) {
+
     throw "Application directory was not created: $AppDir"
 }
 
 $ExePath = "$AppDir\$ProjectName.exe"
 
 if (-not (Test-Path $ExePath)) {
+
     throw "Application EXE was not created: $ExePath"
 }
 
@@ -242,6 +336,7 @@ Compress-Archive `
     -Force
 
 if (-not (Test-Path $ZipPath)) {
+
     throw "ZIP archive was not created."
 }
 
@@ -258,13 +353,20 @@ Write-Host "             BUILD SUCCESSFUL"
 Write-Host "============================================"
 Write-Host ""
 
-Write-Host "Application:"
+Write-Host "Windows application:"
 Write-Host "    $ExePath"
 Write-Host ""
 
-Write-Host "ZIP:"
+Write-Host "Windows ZIP:"
 Write-Host "    $ZipPath"
 Write-Host ""
+
+if ($ServerJarFiles.Count -eq 1) {
+
+    Write-Host "Dedicated server JAR:"
+    Write-Host "    $($ServerJarFiles[0].FullName)"
+    Write-Host ""
+}
 
 Write-Host "============================================"
 Write-Host ""

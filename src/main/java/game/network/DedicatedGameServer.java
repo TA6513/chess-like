@@ -13,6 +13,9 @@ import java.security.SecureRandom;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import game.Player;
+import game.Move;
+
 public class DedicatedGameServer {
 
     private static final int DEFAULT_PORT = 5000;
@@ -33,7 +36,6 @@ public class DedicatedGameServer {
     private final SecureRandom random = new SecureRandom();
 
     private ServerSocket serverSocket;
-
     /*
      * -----------------------------------------
      * ROOM STATE
@@ -363,6 +365,35 @@ public class DedicatedGameServer {
         }
     }
 
+    private void checkAuthoritativeGameOver(
+            GameRoom room) {
+
+        AuthoritativeGame game = room.getGame();
+
+        if (!game.isGameOver()) {
+            return;
+        }
+
+        String winner;
+
+        if (game.getWinner() == Player.PLAYER_ONE) {
+
+            winner = "PLAYER_ONE";
+
+        } else {
+
+            winner = "PLAYER_TWO";
+        }
+
+        room.broadcast(
+                "GAME_OVER "
+                        + winner
+                        + " "
+                        + game.getWinReason());
+
+        finishRoom(room);
+    }
+
     /*
      * =========================================
      * GAME ROOM
@@ -379,11 +410,34 @@ public class DedicatedGameServer {
 
         private ClientConnection playerTwo;
 
+        private AuthoritativeGame game;
+
         GameRoom(String roomCode) {
 
             this.roomCode = roomCode;
 
             state = RoomState.WAITING;
+
+            game = new AuthoritativeGame();
+        }
+
+        AuthoritativeGame getGame() {
+
+            return game;
+        }
+
+        Player getPlayerForConnection(
+                ClientConnection connection) {
+
+            if (connection == playerOne) {
+                return Player.PLAYER_ONE;
+            }
+
+            if (connection == playerTwo) {
+                return Player.PLAYER_TWO;
+            }
+
+            return null;
         }
 
         String getRoomCode() {
@@ -400,11 +454,6 @@ public class DedicatedGameServer {
                 RoomState state) {
 
             this.state = state;
-        }
-
-        ClientConnection getPlayerOne() {
-
-            return playerOne;
         }
 
         ClientConnection getPlayerTwo() {
@@ -447,34 +496,6 @@ public class DedicatedGameServer {
             if (playerOne != null) {
 
                 playerOne.send(message);
-            }
-        }
-
-        void sendToPlayerTwo(
-                String message) {
-
-            if (playerTwo != null) {
-
-                playerTwo.send(message);
-            }
-        }
-
-        /*
-         * Send a message to the opponent only.
-         */
-        void sendToOtherPlayer(
-                ClientConnection sender,
-                String message) {
-
-            if (sender == playerOne) {
-
-                sendToPlayerTwo(
-                        message);
-
-            } else if (sender == playerTwo) {
-
-                sendToPlayerOne(
-                        message);
             }
         }
 
@@ -678,11 +699,54 @@ public class DedicatedGameServer {
              */
 
             if (message.startsWith(
-                    "MOVE ")) {
+                    "REQUEST_MOVE ")) {
 
-                room.sendToOtherPlayer(
-                        this,
-                        message);
+                String moveText = "MOVE "
+                        + message.substring(
+                                "REQUEST_MOVE ".length());
+
+                try {
+
+                    Move move = Move.deserialize(
+                            moveText);
+
+                    Player player = room.getPlayerForConnection(
+                            this);
+
+                    AuthoritativeGame.Result result = room.getGame()
+                            .applyMove(
+                                    player,
+                                    move);
+
+                    if (result == AuthoritativeGame.Result.ACCEPTED) {
+
+                        /*
+                         * Tell BOTH clients to apply exactly
+                         * the validated move.
+                         */
+                        room.broadcast(
+                                "APPLY_"
+                                        + move.serialize());
+
+                        /*
+                         * Server independently determines
+                         * whether this ended the game.
+                         */
+                        checkAuthoritativeGameOver(
+                                room);
+
+                    } else {
+
+                        send(
+                                "ACTION_REJECTED "
+                                        + result.name());
+                    }
+
+                } catch (IllegalArgumentException e) {
+
+                    send(
+                            "ACTION_REJECTED INVALID_MOVE");
+                }
 
                 return;
             }
@@ -694,15 +758,29 @@ public class DedicatedGameServer {
              */
 
             if (message.equals(
-                    "PASS")) {
+                    "REQUEST_PASS")) {
 
-                room.sendToOtherPlayer(
-                        this,
-                        message);
+                Player player = room.getPlayerForConnection(
+                        this);
+
+                AuthoritativeGame.Result result = room.getGame()
+                        .applyPass(
+                                player);
+
+                if (result == AuthoritativeGame.Result.ACCEPTED) {
+
+                    room.broadcast(
+                            "APPLY_PASS");
+
+                } else {
+
+                    send(
+                            "ACTION_REJECTED "
+                                    + result.name());
+                }
 
                 return;
             }
-
             /*
              * ---------------------------------
              * NORMAL GAME OVER

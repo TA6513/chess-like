@@ -85,8 +85,7 @@ public class GameServer {
 
         } catch (IOException e) {
 
-            if (!isClosed()) {
-
+            if (!isServerClosed()) {
                 e.printStackTrace();
             }
         }
@@ -137,10 +136,64 @@ public class GameServer {
 
         } catch (IOException e) {
 
-            if (!isClosed()) {
+            /*
+             * Only report unexpected errors.
+             *
+             * If stop() intentionally closed the socket,
+             * we don't need a stack trace.
+             */
 
+            if (!isClientClosed()) {
                 e.printStackTrace();
             }
+
+        } finally {
+
+            /*
+             * The client disconnected or the socket
+             * was closed.
+             */
+            closeClientConnection();
+
+            /*
+             * Tell Main.java that the LAN connection
+             * is no longer active.
+             */
+            notifyConnectionChanged();
+        }
+    }
+
+    private boolean isClientClosed() {
+
+        return socket == null
+                || socket.isClosed();
+    }
+
+    private boolean isServerClosed() {
+
+        return serverSocket == null
+                || serverSocket.isClosed();
+    }
+
+    private void closeClientConnection() {
+
+        try {
+
+            if (socket != null
+                    && !socket.isClosed()) {
+
+                socket.close();
+            }
+
+        } catch (IOException e) {
+
+            e.printStackTrace();
+
+        } finally {
+
+            socket = null;
+            reader = null;
+            writer = null;
         }
     }
 
@@ -283,13 +336,19 @@ public class GameServer {
      */
     public void stop() {
 
+        /*
+         * Close the connected player first.
+         */
+        closeClientConnection();
+
+        /*
+         * Then stop listening for new connections.
+         */
         try {
 
-            if (socket != null) {
-                socket.close();
-            }
+            if (serverSocket != null
+                    && !serverSocket.isClosed()) {
 
-            if (serverSocket != null) {
                 serverSocket.close();
             }
 
@@ -299,16 +358,7 @@ public class GameServer {
 
         } finally {
 
-            socket = null;
             serverSocket = null;
-            reader = null;
-            writer = null;
         }
-    }
-
-    private boolean isClosed() {
-
-        return serverSocket == null
-                || serverSocket.isClosed();
     }
 }

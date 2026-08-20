@@ -25,6 +25,14 @@ public class Game {
     private Player localPlayer;
 
     /*
+     * True during LAN or online multiplayer.
+     *
+     * False during offline play, where this computer
+     * controls both Player 1 and Player 2.
+     */
+    private boolean restrictToLocalPlayer;
+
+    /*
      * The player whose turn it currently is.
      */
     private Player currentPlayer;
@@ -57,6 +65,19 @@ public class Game {
      */
     private Runnable passMade;
 
+    /*
+     * Used by authoritative online play.
+     *
+     * In online mode a local action is requested from
+     * the dedicated server instead of being applied
+     * immediately.
+     */
+    private Consumer<Move> moveRequested;
+
+    private Runnable passRequested;
+
+    private boolean authoritativeOnlineMode;
+
     public Game() {
 
         board = new Board();
@@ -66,6 +87,8 @@ public class Game {
         playerOnePieces = new ArrayList<>();
         playerTwoPieces = new ArrayList<>();
         neutralPieces = new ArrayList<>();
+
+        authoritativeOnlineMode = false;
 
         /*
          * Player 1 starts the game.
@@ -77,6 +100,8 @@ public class Game {
          * game controls Player 1.
          */
         localPlayer = Player.PLAYER_ONE;
+
+        restrictToLocalPlayer = false;
 
         /*
          * Player 1 gets only one action on the opening turn.
@@ -277,6 +302,133 @@ public class Game {
         cell.setPiece(piece);
     }
 
+    public void setMoveRequested(
+            Consumer<Move> callback) {
+
+        moveRequested = callback;
+    }
+
+    public void setPassRequested(
+            Runnable callback) {
+
+        passRequested = callback;
+    }
+
+    public void setAuthoritativeOnlineMode(
+            boolean enabled) {
+
+        authoritativeOnlineMode = enabled;
+    }
+
+    public boolean isAuthoritativeOnlineMode() {
+
+        return authoritativeOnlineMode;
+    }
+
+    /*
+     * Entry point used by the UI when the local
+     * player wants to move.
+     *
+     * Offline/LAN:
+     * Apply immediately.
+     *
+     * Dedicated server:
+     * Send a request and wait for APPLY_MOVE.
+     */
+    public boolean requestMove(
+            Move move) {
+
+        if (move == null
+                || gameOver
+                || !networkReady
+                || !isLocalPlayersTurn()) {
+
+            return false;
+        }
+
+        /*
+         * Do some client-side validation so obviously
+         * illegal requests aren't unnecessarily sent.
+         *
+         * The dedicated server still performs the real
+         * authoritative validation.
+         */
+        Cell source = board.getCell(
+                move.getSourceRow(),
+                move.getSourceColumn());
+
+        Cell destination = board.getCell(
+                move.getDestinationRow(),
+                move.getDestinationColumn());
+
+        if (source == null
+                || destination == null
+                || !isValidMove(
+                        source,
+                        destination)) {
+
+            return false;
+        }
+
+        /*
+         * Dedicated-server mode.
+         *
+         * Do NOT modify the board yet.
+         */
+        if (authoritativeOnlineMode) {
+
+            if (moveRequested == null) {
+                return false;
+            }
+
+            moveRequested.accept(move);
+
+            return true;
+        }
+
+        /*
+         * Offline/LAN mode.
+         */
+        return movePiece(move);
+    }
+
+    /*
+     * Entry point used by the UI when the local
+     * player requests a pass.
+     */
+    public boolean requestPass() {
+
+        if (gameOver
+                || !networkReady
+                || !isLocalPlayersTurn()
+                || movesRemaining <= 0) {
+
+            return false;
+        }
+
+        /*
+         * Online authoritative mode:
+         * ask the server instead of changing state.
+         */
+        if (authoritativeOnlineMode) {
+
+            if (passRequested == null) {
+                return false;
+            }
+
+            passRequested.run();
+
+            return true;
+        }
+
+        /*
+         * Offline/LAN mode.
+         */
+        passMove();
+
+        return true;
+    }
+
     public void setLocalPlayer(Player player) {
 
         if (player != Player.PLAYER_ONE
@@ -296,7 +448,30 @@ public class Game {
 
     public boolean isLocalPlayersTurn() {
 
+        /*
+         * In offline mode this computer controls
+         * both players.
+         */
+        if (!restrictToLocalPlayer) {
+            return true;
+        }
+
+        /*
+         * In a network game this computer may only
+         * control its assigned player.
+         */
         return currentPlayer == localPlayer;
+    }
+
+    public void setRestrictToLocalPlayer(
+            boolean restrict) {
+
+        restrictToLocalPlayer = restrict;
+    }
+
+    public boolean isRestrictedToLocalPlayer() {
+
+        return restrictToLocalPlayer;
     }
 
     /*
@@ -981,6 +1156,40 @@ public class Game {
                 destination);
     }
 
+    public boolean applyAuthoritativeMove(
+            Move move) {
+
+        if (move == null) {
+            return false;
+        }
+
+        Cell source = board.getCell(
+                move.getSourceRow(),
+                move.getSourceColumn());
+
+        Cell destination = board.getCell(
+                move.getDestinationRow(),
+                move.getDestinationColumn());
+
+        if (source == null
+                || destination == null) {
+
+            return false;
+        }
+
+        /*
+         * The server already validated this action.
+         *
+         * Apply it without:
+         *
+         * - checking local ownership
+         * - sending it back to the network
+         */
+        return applyMove(
+                source,
+                destination);
+    }
+
     /*
      * Applies a PASS message received from
      * the other computer.
@@ -1000,6 +1209,15 @@ public class Game {
          * the opponent is the current player.
          */
         if (isLocalPlayersTurn()) {
+            return false;
+        }
+
+        return applyPass();
+    }
+
+    public boolean applyAuthoritativePass() {
+
+        if (gameOver) {
             return false;
         }
 

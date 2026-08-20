@@ -110,10 +110,49 @@ public class GameClient {
 
         } catch (IOException e) {
 
+            /*
+             * Only report unexpected disconnects.
+             */
             if (!isClosed()) {
 
                 e.printStackTrace();
             }
+
+        } finally {
+
+            /*
+             * The host disconnected or the socket
+             * was closed.
+             */
+            closeConnection();
+
+            /*
+             * Tell Main.java that the connection
+             * state changed.
+             */
+            notifyConnectionChanged();
+        }
+    }
+
+    private void closeConnection() {
+
+        try {
+
+            if (socket != null
+                    && !socket.isClosed()) {
+
+                socket.close();
+            }
+
+        } catch (IOException e) {
+
+            e.printStackTrace();
+
+        } finally {
+
+            socket = null;
+            reader = null;
+            writer = null;
         }
     }
 
@@ -256,22 +295,7 @@ public class GameClient {
      */
     public void disconnect() {
 
-        try {
-
-            if (socket != null) {
-                socket.close();
-            }
-
-        } catch (IOException e) {
-
-            e.printStackTrace();
-
-        } finally {
-
-            socket = null;
-            reader = null;
-            writer = null;
-        }
+        closeConnection();
     }
 
     private boolean isClosed() {
