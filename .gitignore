@@ -1,22 +1,31 @@
 # Maven build output
 target/
 
-# Java compiled files
+# Packaged application output
+release/
+
+# Java
 *.class
 
 # IDE files
-.vscode/
 .idea/
+.vscode/
 *.iml
-
-# Eclipse
-.project
 .classpath
+.project
 .settings/
 
 # OS files
 .DS_Store
 Thumbs.db
 
-# Packaged releases
-release/
+# Never commit SSH/private keys
+*.pem
+*.key
+id_rsa
+id_ed25519
+chess-like-server
+chess-like-server-deploy
+
+# Local deployment configuration
+deploy-config.ps1

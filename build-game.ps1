@@ -2,6 +2,17 @@
 # Chess Like Game - Release Build Script
 # ============================================
 
+param (
+
+    # Add -DeployServer when you want the newly
+    # built server JAR uploaded to Linux.
+    [switch]$DeployServer
+)
+
+$SshKey =
+"$env:USERPROFILE\.ssh\chess-like-server-deploy"
+
+
 $ErrorActionPreference = "Stop"
 
 Write-Host ""
@@ -25,7 +36,7 @@ $AppDir = "$ReleaseDir\$ProjectName"
 $ZipPath = "$ReleaseDir\$ProjectName.zip"
 
 # --------------------------------------------
-# Java / JDK settings
+# JDK settings
 # --------------------------------------------
 
 $JavaHome = "C:\Program Files\Java\jdk-26.0.2"
@@ -42,40 +53,48 @@ Write-Host "[1/7] Checking JDK..."
 Write-Host ""
 
 if (-not (Test-Path $JavaExe)) {
+
     throw "Java was not found at: $JavaExe"
 }
 
 if (-not (Test-Path $JavacExe)) {
+
     throw "javac was not found at: $JavacExe"
 }
 
 if (-not (Test-Path $JpackageExe)) {
+
     throw "jpackage was not found at: $JpackageExe"
 }
 
-# Make sure Maven and other tools use this JDK.
+# Make Maven use this JDK.
 $env:JAVA_HOME = $JavaHome
 
 # Put this JDK first on PATH for this script.
-$env:Path = "$JavaHome\bin;$env:Path"
+$env:Path =
+"$JavaHome\bin;$env:Path"
 
 Write-Host "JAVA_HOME:"
 Write-Host "    $env:JAVA_HOME"
 Write-Host ""
 
 Write-Host "Java:"
+
 & $JavaExe --version
 
 if ($LASTEXITCODE -ne 0) {
+
     throw "Java could not be executed."
 }
 
 Write-Host ""
 
 Write-Host "javac:"
+
 & $JavacExe --version
 
 if ($LASTEXITCODE -ne 0) {
+
     throw "javac could not be executed."
 }
 
@@ -90,6 +109,7 @@ Write-Host ""
 mvn --version
 
 if ($LASTEXITCODE -ne 0) {
+
     throw "Maven could not be found."
 }
 
@@ -104,6 +124,7 @@ Write-Host ""
 & $JpackageExe --version
 
 if ($LASTEXITCODE -ne 0) {
+
     throw "jpackage could not be executed."
 }
 
@@ -118,24 +139,18 @@ Write-Host ""
 mvn clean package
 
 if ($LASTEXITCODE -ne 0) {
+
     throw "Maven build failed."
 }
 
 # --------------------------------------------
-# Find application JAR
+# Find normal application JAR
 # --------------------------------------------
 
 Write-Host ""
 Write-Host "[5/7] Preparing application files..."
 Write-Host ""
 
-# Maven now creates both:
-#
-#   chess-like-game-X.X.X.jar
-#   chess-like-game-X.X.X-server.jar
-#
-# Only the normal game JAR should be passed
-# to jpackage.
 $JarFiles = @(
     Get-ChildItem "$TargetDir\*.jar" |
     Where-Object {
@@ -144,6 +159,7 @@ $JarFiles = @(
 )
 
 if ($JarFiles.Count -eq 0) {
+
     throw "No application JAR was found in $TargetDir."
 }
 
@@ -174,24 +190,30 @@ $ServerJarFiles = @(
     Get-ChildItem "$TargetDir\*-server.jar"
 )
 
-if ($ServerJarFiles.Count -eq 1) {
+if ($ServerJarFiles.Count -eq 0) {
+
+    throw "No dedicated server JAR was found."
+}
+
+if ($ServerJarFiles.Count -gt 1) {
 
     Write-Host ""
-    Write-Host "Dedicated server JAR:"
-    Write-Host "    $($ServerJarFiles[0].Name)"
+    Write-Host "Dedicated server JAR candidates:"
 
+    foreach ($File in $ServerJarFiles) {
+
+        Write-Host "    $($File.Name)"
+    }
+
+    throw "Multiple dedicated server JARs were found."
 }
-elseif ($ServerJarFiles.Count -gt 1) {
 
-    Write-Host ""
-    Write-Host "WARNING: Multiple server JARs were found."
+$ServerJarFile =
+$ServerJarFiles[0]
 
-}
-else {
-
-    Write-Host ""
-    Write-Host "WARNING: No dedicated server JAR was found."
-}
+Write-Host ""
+Write-Host "Dedicated server JAR:"
+Write-Host "    $($ServerJarFile.Name)"
 
 # --------------------------------------------
 # Recreate temporary package directory
@@ -262,7 +284,7 @@ New-Item `
 Out-Null
 
 # --------------------------------------------
-# Create application image
+# Create Windows application image
 # --------------------------------------------
 
 Write-Host ""
@@ -270,6 +292,7 @@ Write-Host "Creating application image..."
 Write-Host ""
 
 $JpackageArgs = @(
+
     "--type"
     "app-image"
 
@@ -296,18 +319,17 @@ $JpackageArgs = @(
 
     "--dest"
     $ReleaseDir
-
-    "--verbose"
 )
 
 & $JpackageExe @JpackageArgs
 
 if ($LASTEXITCODE -ne 0) {
+
     throw "jpackage failed."
 }
 
 # --------------------------------------------
-# Verify application image
+# Verify Windows application image
 # --------------------------------------------
 
 if (-not (Test-Path $AppDir)) {
@@ -315,7 +337,8 @@ if (-not (Test-Path $AppDir)) {
     throw "Application directory was not created: $AppDir"
 }
 
-$ExePath = "$AppDir\$ProjectName.exe"
+$ExePath =
+"$AppDir\$ProjectName.exe"
 
 if (-not (Test-Path $ExePath)) {
 
@@ -341,7 +364,7 @@ if (-not (Test-Path $ZipPath)) {
 }
 
 # --------------------------------------------
-# Final information
+# Build complete
 # --------------------------------------------
 
 Write-Host ""
@@ -361,10 +384,249 @@ Write-Host "Windows ZIP:"
 Write-Host "    $ZipPath"
 Write-Host ""
 
-if ($ServerJarFiles.Count -eq 1) {
+Write-Host "Dedicated server JAR:"
+Write-Host "    $($ServerJarFile.FullName)"
+Write-Host ""
 
-    Write-Host "Dedicated server JAR:"
-    Write-Host "    $($ServerJarFiles[0].FullName)"
+# ============================================
+# Optional dedicated-server deployment
+# ============================================
+
+if ($DeployServer) {
+
+    Write-Host ""
+    Write-Host "============================================"
+    Write-Host "       Deploying Dedicated Server"
+    Write-Host "============================================"
+    Write-Host ""
+
+    # ----------------------------------------
+    # Load local deployment configuration
+    # ----------------------------------------
+
+    $DeployConfig =
+    Join-Path `
+        $PSScriptRoot `
+        "deploy-config.ps1"
+
+    if (-not (Test-Path $DeployConfig)) {
+
+        throw @"
+Deployment configuration was not found:
+
+    $DeployConfig
+
+Copy deploy-config.example.ps1 to deploy-config.ps1
+and configure your Linux server settings.
+"@
+    }
+
+    . $DeployConfig
+
+    $RequiredSettings = @(
+        "ServerUser",
+        "ServerHost",
+        "SshKey",
+        "RemoteTempJar",
+        "RemoteServerJar",
+        "ServerService"
+    )
+
+    foreach ($Setting in $RequiredSettings) {
+
+        $Value =
+        Get-Variable `
+            -Name $Setting `
+            -ValueOnly `
+            -ErrorAction SilentlyContinue
+
+        if ([string]::IsNullOrWhiteSpace($Value)) {
+
+            throw "Deployment setting '$Setting' is missing."
+        }
+    }
+
+    if (-not (Test-Path $SshKey)) {
+
+        throw "SSH private key was not found: $SshKey"
+    }
+
+    # ----------------------------------------
+    # Check SSH tools
+    # ----------------------------------------
+
+    $SshCommand =
+    Get-Command ssh `
+        -ErrorAction SilentlyContinue
+
+    if ($null -eq $SshCommand) {
+
+        throw "ssh could not be found."
+    }
+
+    $ScpCommand =
+    Get-Command scp `
+        -ErrorAction SilentlyContinue
+
+    if ($null -eq $ScpCommand) {
+
+        throw "scp could not be found."
+    }
+
+    # ----------------------------------------
+    # Check SSH key
+    # ----------------------------------------
+
+    if (-not (Test-Path $SshKey)) {
+
+        throw "SSH key was not found: $SshKey"
+    }
+
+    # ----------------------------------------
+    # Test SSH authentication
+    # ----------------------------------------
+
+    Write-Host "[SERVER 1/4] Testing SSH connection..."
+    Write-Host ""
+
+    ssh `
+        -i $SshKey `
+        -o IdentitiesOnly=yes `
+        -o BatchMode=yes `
+        "${ServerUser}@${ServerHost}" `
+        "echo SSH connection successful"
+
+    if ($LASTEXITCODE -ne 0) {
+
+        throw "SSH key authentication failed."
+    }
+
+    # ----------------------------------------
+    # Upload new JAR
+    # ----------------------------------------
+
+    Write-Host ""
+    Write-Host "[SERVER 2/4] Uploading server JAR..."
+    Write-Host ""
+
+    scp `
+        -i $SshKey `
+        -o IdentitiesOnly=yes `
+        -o BatchMode=yes `
+        $ServerJarFile.FullName `
+        "${ServerUser}@${ServerHost}:${RemoteTempJar}"
+
+    if ($LASTEXITCODE -ne 0) {
+
+        throw "Dedicated server upload failed."
+    }
+
+    # ----------------------------------------
+    # Install new JAR
+    # ----------------------------------------
+
+    Write-Host ""
+    Write-Host "[SERVER 3/4] Installing new server..."
+    Write-Host ""
+
+    $InstallCommand =
+    "mv '$RemoteTempJar' '$RemoteServerJar' && " +
+    "chmod 644 '$RemoteServerJar'"
+
+    ssh `
+        -i $SshKey `
+        -o IdentitiesOnly=yes `
+        -o BatchMode=yes `
+        "${ServerUser}@${ServerHost}" `
+        $InstallCommand
+
+    if ($LASTEXITCODE -ne 0) {
+
+        throw "Could not install the new dedicated server JAR."
+    }
+
+    # ----------------------------------------
+    # Restart server
+    # ----------------------------------------
+
+    Write-Host ""
+    Write-Host "[SERVER 4/4] Restarting dedicated server..."
+    Write-Host ""
+
+    ssh `
+        -i $SshKey `
+        -o IdentitiesOnly=yes `
+        -o BatchMode=yes `
+        "${ServerUser}@${ServerHost}" `
+        "sudo -n systemctl restart $ServerService"
+
+    if ($LASTEXITCODE -ne 0) {
+
+        throw "Could not restart the dedicated server."
+    }
+
+    # ----------------------------------------
+    # Verify server
+    # ----------------------------------------
+
+    Start-Sleep -Seconds 2
+
+    $ServerStatus =
+    ssh `
+        -i $SshKey `
+        -o IdentitiesOnly=yes `
+        -o BatchMode=yes `
+        "${ServerUser}@${ServerHost}" `
+        "sudo -n systemctl is-active $ServerService"
+
+    if ($LASTEXITCODE -ne 0 `
+            -or $ServerStatus.Trim() -ne "active") {
+
+        Write-Host ""
+        Write-Host "Dedicated server failed to start."
+        Write-Host ""
+
+        Write-Host "Recent server logs:"
+        Write-Host ""
+
+        ssh `
+            -i $SshKey `
+            -o IdentitiesOnly=yes `
+            -o BatchMode=yes `
+            "${ServerUser}@${ServerHost}" `
+            "journalctl -u $ServerService -n 30 --no-pager"
+
+        throw "Dedicated server deployment failed."
+    }
+
+    Write-Host ""
+    Write-Host "============================================"
+    Write-Host "       SERVER DEPLOYMENT SUCCESSFUL"
+    Write-Host "============================================"
+    Write-Host ""
+
+    Write-Host "Server:"
+    Write-Host "    $ServerHost"
+    Write-Host ""
+
+    Write-Host "Service:"
+    Write-Host "    $ServerService"
+    Write-Host ""
+
+    Write-Host "Status:"
+    Write-Host "    $ServerStatus"
+    Write-Host ""
+
+    Write-Host "Recent server logs:"
+    Write-Host ""
+
+    ssh `
+        -i $SshKey `
+        -o IdentitiesOnly=yes `
+        -o BatchMode=yes `
+        "${ServerUser}@${ServerHost}" `
+        "journalctl -u $ServerService -n 10 --no-pager"
+
     Write-Host ""
 }
 

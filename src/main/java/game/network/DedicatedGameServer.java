@@ -11,7 +11,9 @@ import java.net.Socket;
 import java.security.SecureRandom;
 
 import java.util.Map;
+
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import game.Player;
 import game.Move;
@@ -29,19 +31,25 @@ public class DedicatedGameServer {
     private static final int ROOM_CODE_LENGTH = 6;
 
     /*
-     * Every room on the dedicated server.
+     * Every active room on the dedicated server.
      */
     private final Map<String, GameRoom> rooms = new ConcurrentHashMap<>();
 
     private final SecureRandom random = new SecureRandom();
 
+    /*
+     * Number of TCP clients currently connected
+     * to this server.
+     */
+    private final AtomicInteger connectedClients = new AtomicInteger();
+
     private ServerSocket serverSocket;
+
     /*
      * -----------------------------------------
      * ROOM STATE
      * -----------------------------------------
      */
-
     private enum RoomState {
 
         WAITING,
@@ -54,7 +62,6 @@ public class DedicatedGameServer {
      * MAIN
      * -----------------------------------------
      */
-
     public static void main(String[] args) {
 
         int port = DEFAULT_PORT;
@@ -62,13 +69,14 @@ public class DedicatedGameServer {
         /*
          * Allow:
          *
-         * java ... DedicatedGameServer 5000
+         * java -jar server.jar 5000
          */
         if (args.length > 0) {
 
             try {
 
-                port = Integer.parseInt(args[0]);
+                port = Integer.parseInt(
+                        args[0]);
 
             } catch (NumberFormatException e) {
 
@@ -82,7 +90,8 @@ public class DedicatedGameServer {
 
         try {
 
-            server.start(port);
+            server.start(
+                    port);
 
         } catch (IOException e) {
 
@@ -99,13 +108,15 @@ public class DedicatedGameServer {
      * SERVER START
      * -----------------------------------------
      */
-
-    public void start(int port)
+    public void start(
+            int port)
             throws IOException {
 
-        serverSocket = new ServerSocket(port);
+        serverSocket = new ServerSocket(
+                port);
 
         System.out.println();
+
         System.out.println(
                 "========================================");
 
@@ -120,6 +131,8 @@ public class DedicatedGameServer {
                         + port);
 
         System.out.println();
+
+        logServerStatus();
 
         /*
          * Accept clients forever.
@@ -136,9 +149,14 @@ public class DedicatedGameServer {
 
             try {
 
-                ClientConnection connection = new ClientConnection(socket);
+                ClientConnection connection = new ClientConnection(
+                        socket);
+
+                connectedClients.incrementAndGet();
 
                 connection.start();
+
+                logServerStatus();
 
             } catch (IOException e) {
 
@@ -156,7 +174,6 @@ public class DedicatedGameServer {
      * CREATE ROOM
      * -----------------------------------------
      */
-
     private void createRoom(
             ClientConnection player) {
 
@@ -169,6 +186,7 @@ public class DedicatedGameServer {
         }
 
         GameRoom room;
+
         String roomCode;
 
         /*
@@ -179,7 +197,8 @@ public class DedicatedGameServer {
 
             roomCode = generateRoomCode();
 
-            room = new GameRoom(roomCode);
+            room = new GameRoom(
+                    roomCode);
 
             if (rooms.putIfAbsent(
                     roomCode,
@@ -191,9 +210,11 @@ public class DedicatedGameServer {
 
         synchronized (room) {
 
-            room.setPlayerOne(player);
+            room.setPlayerOne(
+                    player);
 
-            player.setRoom(room);
+            player.setRoom(
+                    room);
 
             /*
              * Tell the creator which room was made
@@ -211,6 +232,8 @@ public class DedicatedGameServer {
                 "Room "
                         + roomCode
                         + " created. State: WAITING");
+
+        logServerStatus();
     }
 
     /*
@@ -218,7 +241,6 @@ public class DedicatedGameServer {
      * JOIN ROOM
      * -----------------------------------------
      */
-
     private void joinRoom(
             ClientConnection player,
             String requestedRoomCode) {
@@ -235,7 +257,8 @@ public class DedicatedGameServer {
                 .trim()
                 .toUpperCase();
 
-        GameRoom room = rooms.get(roomCode);
+        GameRoom room = rooms.get(
+                roomCode);
 
         if (room == null) {
 
@@ -267,9 +290,11 @@ public class DedicatedGameServer {
                 return;
             }
 
-            room.setPlayerTwo(player);
+            room.setPlayerTwo(
+                    player);
 
-            player.setRoom(room);
+            player.setRoom(
+                    room);
 
             /*
              * Joining client becomes Player 2.
@@ -301,6 +326,8 @@ public class DedicatedGameServer {
                             + roomCode
                             + " now PLAYING.");
         }
+
+        logServerStatus();
     }
 
     /*
@@ -308,7 +335,6 @@ public class DedicatedGameServer {
      * ROOM CODE
      * -----------------------------------------
      */
-
     private String generateRoomCode() {
 
         StringBuilder code = new StringBuilder();
@@ -319,7 +345,8 @@ public class DedicatedGameServer {
                     ROOM_CHARACTERS.length());
 
             code.append(
-                    ROOM_CHARACTERS.charAt(index));
+                    ROOM_CHARACTERS.charAt(
+                            index));
         }
 
         return code.toString();
@@ -330,7 +357,6 @@ public class DedicatedGameServer {
      * FINISH ROOM
      * -----------------------------------------
      */
-
     private void finishRoom(
             GameRoom room) {
 
@@ -363,8 +389,15 @@ public class DedicatedGameServer {
                             + room.getRoomCode()
                             + " now FINISHED.");
         }
+
+        logServerStatus();
     }
 
+    /*
+     * -----------------------------------------
+     * AUTHORITATIVE GAME OVER
+     * -----------------------------------------
+     */
     private void checkAuthoritativeGameOver(
             GameRoom room) {
 
@@ -391,7 +424,45 @@ public class DedicatedGameServer {
                         + " "
                         + game.getWinReason());
 
-        finishRoom(room);
+        finishRoom(
+                room);
+    }
+
+    /*
+     * -----------------------------------------
+     * SERVER STATUS
+     * -----------------------------------------
+     */
+    private synchronized void logServerStatus() {
+
+        int waitingRooms = 0;
+        int playingRooms = 0;
+
+        for (GameRoom room : rooms.values()) {
+
+            if (room.getState() == RoomState.WAITING) {
+
+                waitingRooms++;
+
+            } else if (room.getState() == RoomState.PLAYING) {
+
+                playingRooms++;
+            }
+        }
+
+        int activeRooms = waitingRooms
+                + playingRooms;
+
+        System.out.println(
+                "SERVER STATUS"
+                        + " | Active rooms: "
+                        + activeRooms
+                        + " | Waiting: "
+                        + waitingRooms
+                        + " | Playing: "
+                        + playingRooms
+                        + " | Connected clients: "
+                        + connectedClients.get());
     }
 
     /*
@@ -399,7 +470,6 @@ public class DedicatedGameServer {
      * GAME ROOM
      * =========================================
      */
-
     private class GameRoom {
 
         private final String roomCode;
@@ -410,9 +480,10 @@ public class DedicatedGameServer {
 
         private ClientConnection playerTwo;
 
-        private AuthoritativeGame game;
+        private final AuthoritativeGame game;
 
-        GameRoom(String roomCode) {
+        GameRoom(
+                String roomCode) {
 
             this.roomCode = roomCode;
 
@@ -430,10 +501,12 @@ public class DedicatedGameServer {
                 ClientConnection connection) {
 
             if (connection == playerOne) {
+
                 return Player.PLAYER_ONE;
             }
 
             if (connection == playerTwo) {
+
                 return Player.PLAYER_TWO;
             }
 
@@ -481,12 +554,14 @@ public class DedicatedGameServer {
 
             if (playerOne != null) {
 
-                playerOne.send(message);
+                playerOne.send(
+                        message);
             }
 
             if (playerTwo != null) {
 
-                playerTwo.send(message);
+                playerTwo.send(
+                        message);
             }
         }
 
@@ -495,7 +570,8 @@ public class DedicatedGameServer {
 
             if (playerOne != null) {
 
-                playerOne.send(message);
+                playerOne.send(
+                        message);
             }
         }
 
@@ -522,7 +598,8 @@ public class DedicatedGameServer {
                  * Any disconnect permanently ends
                  * this particular room.
                  */
-                finishRoom(this);
+                finishRoom(
+                        this);
 
                 /*
                  * Notify whichever player remains.
@@ -541,7 +618,6 @@ public class DedicatedGameServer {
      * CLIENT CONNECTION
      * =========================================
      */
-
     private class ClientConnection
             extends Thread {
 
@@ -571,7 +647,8 @@ public class DedicatedGameServer {
 
             disconnected = false;
 
-            setDaemon(true);
+            setDaemon(
+                    true);
         }
 
         GameRoom getRoom() {
@@ -618,7 +695,6 @@ public class DedicatedGameServer {
          * MESSAGE HANDLING
          * -------------------------------------
          */
-
         private void handleMessage(
                 String message) {
 
@@ -633,11 +709,11 @@ public class DedicatedGameServer {
              * CREATE ROOM
              * ---------------------------------
              */
-
             if (message.equals(
                     "CREATE_ROOM")) {
 
-                createRoom(this);
+                createRoom(
+                        this);
 
                 return;
             }
@@ -649,11 +725,11 @@ public class DedicatedGameServer {
              * JOIN_ROOM ABC123
              * ---------------------------------
              */
-
             if (message.startsWith(
                     "JOIN_ROOM ")) {
 
-                String[] parts = message.split("\\s+");
+                String[] parts = message.split(
+                        "\\s+");
 
                 if (parts.length != 2) {
 
@@ -697,7 +773,6 @@ public class DedicatedGameServer {
              * MOVE
              * ---------------------------------
              */
-
             if (message.startsWith(
                     "REQUEST_MOVE ")) {
 
@@ -756,7 +831,6 @@ public class DedicatedGameServer {
              * PASS
              * ---------------------------------
              */
-
             if (message.equals(
                     "REQUEST_PASS")) {
 
@@ -781,21 +855,23 @@ public class DedicatedGameServer {
 
                 return;
             }
+
             /*
              * ---------------------------------
-             * NORMAL GAME OVER
+             * LEGACY GAME OVER
              * ---------------------------------
              *
-             * Clients still independently calculate
-             * the winner. This message is used to
-             * close the server room so nobody else
-             * can join/reuse the match.
+             * The authoritative game now normally
+             * determines game-over state itself.
+             *
+             * This remains for compatibility with
+             * older clients.
              */
-
             if (message.equals(
                     "GAME_OVER")) {
 
-                finishRoom(room);
+                finishRoom(
+                        room);
 
                 room.broadcast(
                         "ROOM_FINISHED");
@@ -828,7 +904,6 @@ public class DedicatedGameServer {
          * DISCONNECT
          * -------------------------------------
          */
-
         private void disconnect() {
 
             if (disconnected) {
@@ -854,8 +929,12 @@ public class DedicatedGameServer {
             } catch (IOException ignored) {
             }
 
+            connectedClients.decrementAndGet();
+
             System.out.println(
                     "Client disconnected.");
+
+            logServerStatus();
         }
     }
 }
