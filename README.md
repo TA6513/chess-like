@@ -1,6 +1,6 @@
 # Chess Like Game
 
-A two-player strategy game built with Java and JavaFX.
+A two-player strategy game built with Java and JavaFX, currently in active development.
 
 Players move pieces across an 11×11 board, capture opposing pieces, and permanently claim territory.
 
@@ -47,6 +47,20 @@ Download the latest Windows release, extract the ZIP, and run:
 `Chess Like Game.exe`
 
 The packaged release includes the required Java runtime.
+
+### Future Plans
+
+Singleplayer scenarios:
+
+- Play games with different amounts of pieces in different starting positions, and win the game under certain conditions.
+
+Game mechanic tweaks and upates:
+
+- Currently experimenting with game flow, may add or remove mechanics in the future.
+
+Art updates:
+
+- Adding a more polished UI and piece sprites, music, SFX, etc.
 
 ### Development
 
