@@ -1774,7 +1774,7 @@ public class Main extends Application {
 				playerText = "WAITING FOR OPPONENT\n";
 			}
 
-		} else if (game.isLocalPlayersTurn()) {
+		} else if (networkMode == NetworkMode.OFFLINE) {
 
 			if (player == Player.PLAYER_ONE) {
 
@@ -1785,17 +1785,17 @@ public class Main extends Application {
 				playerText = "PLAYER 2'S TURN\n";
 			}
 
+		} else if (game.isLocalPlayersTurn()) {
+
+			playerText = "YOUR TURN\n";
+
 		} else {
 
 			playerText = "OPPONENT'S TURN\n";
 		}
 
-		if (game.isNetworkReady()
-				|| networkMode == NetworkMode.OFFLINE) {
-
-			playerText += "Moves remaining: "
-					+ game.getMovesRemaining();
-		}
+		playerText += "Moves remaining: "
+				+ game.getMovesRemaining();
 
 		turnLabel.setText(
 				playerText);

@@ -404,24 +404,34 @@ if ($DeployServer) {
     # Load local deployment configuration
     # ----------------------------------------
 
-    $DeployConfig =
+    $DeployConfigPath =
     Join-Path `
         $PSScriptRoot `
         "deploy-config.ps1"
 
-    if (-not (Test-Path $DeployConfig)) {
+    if (-not (Test-Path $DeployConfigPath)) {
 
         throw @"
 Deployment configuration was not found:
 
-    $DeployConfig
+    $DeployConfigPath
 
 Copy deploy-config.example.ps1 to deploy-config.ps1
 and configure your Linux server settings.
 "@
     }
 
-    . $DeployConfig
+    $DeployConfig =
+    & $DeployConfigPath
+
+    if ($null -eq $DeployConfig) {
+
+        throw "Deployment configuration could not be loaded."
+    }
+
+    # ----------------------------------------
+    # Validate deployment configuration
+    # ----------------------------------------
 
     $RequiredSettings = @(
         "ServerUser",
@@ -434,16 +444,21 @@ and configure your Linux server settings.
 
     foreach ($Setting in $RequiredSettings) {
 
-        $Value =
-        Get-Variable `
-            -Name $Setting `
-            -ValueOnly `
-            -ErrorAction SilentlyContinue
-
-        if ([string]::IsNullOrWhiteSpace($Value)) {
+        if (-not $DeployConfig.ContainsKey($Setting)) {
 
             throw "Deployment setting '$Setting' is missing."
         }
+
+        if ([string]::IsNullOrWhiteSpace(
+                $DeployConfig[$Setting])) {
+
+            throw "Deployment setting '$Setting' is empty."
+        }
+    }
+
+    if (-not (Test-Path $DeployConfig.SshKey)) {
+
+        throw "SSH private key was not found: $($DeployConfig.SshKey)"
     }
 
     if (-not (Test-Path $SshKey)) {
@@ -490,10 +505,10 @@ and configure your Linux server settings.
     Write-Host ""
 
     ssh `
-        -i $SshKey `
+        -i $DeployConfig.SshKey `
         -o IdentitiesOnly=yes `
         -o BatchMode=yes `
-        "${ServerUser}@${ServerHost}" `
+        "$($DeployConfig.ServerUser)@$($DeployConfig.ServerHost)" `
         "echo SSH connection successful"
 
     if ($LASTEXITCODE -ne 0) {
@@ -510,11 +525,11 @@ and configure your Linux server settings.
     Write-Host ""
 
     scp `
-        -i $SshKey `
+        -i $DeployConfig.SshKey `
         -o IdentitiesOnly=yes `
         -o BatchMode=yes `
         $ServerJarFile.FullName `
-        "${ServerUser}@${ServerHost}:${RemoteTempJar}"
+        "$($DeployConfig.ServerUser)@$($DeployConfig.ServerHost):$($DeployConfig.RemoteTempJar)"
 
     if ($LASTEXITCODE -ne 0) {
 
@@ -530,14 +545,15 @@ and configure your Linux server settings.
     Write-Host ""
 
     $InstallCommand =
-    "mv '$RemoteTempJar' '$RemoteServerJar' && " +
-    "chmod 644 '$RemoteServerJar'"
+    "mv '$($DeployConfig.RemoteTempJar)' " +
+    "'$($DeployConfig.RemoteServerJar)' && " +
+    "chmod 644 '$($DeployConfig.RemoteServerJar)'"
 
     ssh `
-        -i $SshKey `
+        -i $DeployConfig.SshKey `
         -o IdentitiesOnly=yes `
         -o BatchMode=yes `
-        "${ServerUser}@${ServerHost}" `
+        "$($DeployConfig.ServerUser)@$($DeployConfig.ServerHost)" `
         $InstallCommand
 
     if ($LASTEXITCODE -ne 0) {
@@ -554,11 +570,11 @@ and configure your Linux server settings.
     Write-Host ""
 
     ssh `
-        -i $SshKey `
+        -i $DeployConfig.SshKey `
         -o IdentitiesOnly=yes `
         -o BatchMode=yes `
-        "${ServerUser}@${ServerHost}" `
-        "sudo -n systemctl restart $ServerService"
+        "$($DeployConfig.ServerUser)@$($DeployConfig.ServerHost)" `
+        "sudo -n systemctl restart $($DeployConfig.ServerService)"
 
     if ($LASTEXITCODE -ne 0) {
 
@@ -573,10 +589,10 @@ and configure your Linux server settings.
 
     $ServerStatus =
     ssh `
-        -i $SshKey `
+        -i $DeployConfig.SshKey `
         -o IdentitiesOnly=yes `
         -o BatchMode=yes `
-        "${ServerUser}@${ServerHost}" `
+        "$($DeployConfig.ServerUser)@$($DeployConfig.ServerHost)" `
         "sudo -n systemctl is-active $ServerService"
 
     if ($LASTEXITCODE -ne 0 `
@@ -590,10 +606,10 @@ and configure your Linux server settings.
         Write-Host ""
 
         ssh `
-            -i $SshKey `
+            -i $DeployConfig.SshKey `
             -o IdentitiesOnly=yes `
             -o BatchMode=yes `
-            "${ServerUser}@${ServerHost}" `
+            "$($DeployConfig.ServerUser)@$($DeployConfig.ServerHost)" `
             "journalctl -u $ServerService -n 30 --no-pager"
 
         throw "Dedicated server deployment failed."
@@ -621,10 +637,10 @@ and configure your Linux server settings.
     Write-Host ""
 
     ssh `
-        -i $SshKey `
+        -i $DeployConfig.SshKey `
         -o IdentitiesOnly=yes `
         -o BatchMode=yes `
-        "${ServerUser}@${ServerHost}" `
+        "$($DeployConfig.ServerUser)@$($DeployConfig.ServerHost)" `
         "journalctl -u $ServerService -n 10 --no-pager"
 
     Write-Host ""
