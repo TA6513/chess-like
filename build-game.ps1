@@ -995,13 +995,7 @@ Windows may display a security warning because the application is not currently 
     Write-Host "GitHub Release:"
     Write-Host ""
 
-    $ExistingRelease =
-    gh release list `
-        --json tagName `
-        --jq ".[] | select(.tagName == `"$ReleaseTag`") | .tagName"
-
-    if ($ExistingRelease -eq $ReleaseTag) {
-
-        throw "GitHub Release $ReleaseTag already exists."
-    }
+    gh release view `
+        $ReleaseTag `
+        --web
 }
