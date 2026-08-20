@@ -247,7 +247,7 @@ public class Main extends Application {
 
 		leaveGameButton.setOnAction(event -> {
 
-			leaveNetworkGame();
+			leaveGame();
 		});
 
 		startOfflineButton.setOnAction(
@@ -304,15 +304,6 @@ public class Main extends Application {
 		serverFields.setAlignment(
 				Pos.CENTER);
 
-		HBox modeControls = new HBox(
-				8,
-				startOfflineButton,
-				hostLanButton,
-				joinLanButton);
-
-		modeControls.setAlignment(
-				Pos.CENTER);
-
 		HBox lanControls = new HBox(
 				8,
 				startOfflineButton,
@@ -351,9 +342,9 @@ public class Main extends Application {
 		gameControls.setAlignment(
 				Pos.CENTER);
 
-		setGameControlsVisible(false);
+		setNodeVisible(gameControls, false);
 
-		setSetupControlsVisible(true);
+		setNodeVisible(setupControls, true);
 
 		VBox controls = new VBox(
 				7,
@@ -361,9 +352,6 @@ public class Main extends Application {
 				roomCodeLabel,
 				setupControls,
 				gameControls);
-
-		controls.setAlignment(
-				Pos.CENTER);
 
 		controls.setAlignment(
 				Pos.CENTER);
@@ -411,24 +399,42 @@ public class Main extends Application {
 		stage.show();
 	}
 
-	private void setGameControlsVisible(
+	private void setNodeVisible(
+			javafx.scene.Node node,
 			boolean visible) {
 
-		gameControls.setVisible(
-				visible);
-
-		gameControls.setManaged(
-				visible);
+		node.setVisible(visible);
+		node.setManaged(visible);
 	}
 
-	private void setSetupControlsVisible(
-			boolean visible) {
+	private void showGameScreen() {
 
-		setupControls.setVisible(
-				visible);
+		gameStarted = true;
 
-		setupControls.setManaged(
-				visible);
+		setBoardActive(true);
+
+		setNodeVisible(
+				gameControls,
+				true);
+
+		setNodeVisible(
+				setupControls,
+				false);
+	}
+
+	private void showSetupScreen() {
+
+		gameStarted = false;
+
+		setBoardActive(false);
+
+		setNodeVisible(
+				gameControls,
+				false);
+
+		setNodeVisible(
+				setupControls,
+				true);
 	}
 
 	private void setBoardActive(
@@ -459,8 +465,6 @@ public class Main extends Application {
 			return;
 		}
 
-		gameStarted = true;
-
 		game.setNetworkReady(true);
 
 		game.setRestrictToLocalPlayer(false);
@@ -468,11 +472,7 @@ public class Main extends Application {
 		game.setAuthoritativeOnlineMode(
 				false);
 
-		setBoardActive(true);
-
-		setGameControlsVisible(true);
-
-		setSetupControlsVisible(false);
+		showGameScreen();
 
 		networkStatusLabel.setText(
 				"Status: Offline Game");
@@ -560,13 +560,7 @@ public class Main extends Application {
 
 							game.setNetworkReady(true);
 
-							gameStarted = true;
-
-							setBoardActive(true);
-
-							setGameControlsVisible(true);
-
-							setSetupControlsVisible(false);
+							showGameScreen();
 
 							networkStatusLabel.setText(
 									"Status: LAN Player 2 connected");
@@ -718,13 +712,7 @@ public class Main extends Application {
 							game.setNetworkReady(
 									true);
 
-							gameStarted = true;
-
-							setBoardActive(true);
-
-							setGameControlsVisible(true);
-
-							setSetupControlsVisible(false);
+							showGameScreen();
 
 							networkStatusLabel.setText(
 									"Status: Connected to LAN host");
@@ -920,88 +908,50 @@ public class Main extends Application {
 		}
 	}
 
-	private void leaveNetworkGame() {
+	private void leaveGame() {
 
-		if (!gameStarted
-				&& networkMode == NetworkMode.OFFLINE) {
-
+		if (!gameStarted && networkMode == NetworkMode.OFFLINE) {
 			return;
 		}
 
-		/*
-		 * Prevent disconnect callbacks from treating this
-		 * intentional leave as a network failure.
-		 */
 		leavingNetworkGame = true;
-
-		/*
-		 * Close whichever connection is currently active.
-		 */
 		stopNetworking();
 
-		/*
-		 * Create a fresh offline game.
-		 */
-		game = new Game();
+		replaceGame(new Game());
 
-		Board newBoard = game.getBoard();
+		showSetupScreen();
+		
+		networkStatusLabel.setText("Status: Offline");
+		roomCodeLabel.setText("Room: -");
+		roomCodeField.clear();
 
-		gameStarted = false;
+		leavingNetworkGame = false;
 
-		setBoardActive(false);
+		updateDisplay();
+	}
 
-		setGameControlsVisible(false);
+	private void replaceGame(Game newGame) {
 
-		setSetupControlsVisible(true);
+		Board newBoard = newGame.getBoard();
 
-		enableConnectionControls();
-
-		newBoard.setAlignment(
-				Pos.CENTER);
+		newBoard.setAlignment(Pos.CENTER);
 
 		VBox root = (VBox) board.getParent();
 
-		int boardIndex = root.getChildren()
-				.indexOf(board);
+		int boardIndex = root.getChildren().indexOf(board);
 
-		if (boardIndex < 0) {
+		root.getChildren().set(
+				boardIndex,
+				newBoard);
 
-			leavingNetworkGame = false;
-
-			throw new IllegalStateException(
-					"Could not find the board in the main layout.");
-		}
-
-		root.getChildren()
-				.set(
-						boardIndex,
-						newBoard);
-
+		game = newGame;
 		board = newBoard;
-
-		gameStarted = false;
-
-		setBoardActive(false);
 
 		VBox.setVgrow(
 				board,
 				Priority.ALWAYS);
 
 		registerGameCallback();
-
-		enableConnectionControls();
-
-		networkStatusLabel.setText(
-				"Status: Offline");
-
-		roomCodeLabel.setText(
-				"Room: -");
-
-		roomCodeField.clear();
-
-		leavingNetworkGame = false;
-
-		updateDisplay();
 	}
 
 	/*
@@ -1165,13 +1115,7 @@ public class Main extends Application {
 
 					game.setNetworkReady(true);
 
-					gameStarted = true;
-
-					setBoardActive(true);
-
-					setGameControlsVisible(true);
-
-					setSetupControlsVisible(false);
+					showGameScreen();
 
 					networkStatusLabel.setText(
 							"Status: Online game started");
@@ -1247,7 +1191,7 @@ public class Main extends Application {
 
 					gameStarted = true;
 
-					setGameControlsVisible(true);
+					setNodeVisible(gameControls, true);
 
 					board.setManaged(true);
 					board.setVisible(true);
@@ -1524,10 +1468,6 @@ public class Main extends Application {
 
 	private void resetGame() {
 
-		/*
-		 * Reset is only allowed during an active
-		 * offline game.
-		 */
 		if (networkMode != NetworkMode.OFFLINE
 				|| !gameStarted) {
 
@@ -1538,79 +1478,16 @@ public class Main extends Application {
 			return;
 		}
 
-		/*
-		 * Create a completely fresh offline game.
-		 */
-		game = new Game();
+		replaceGame(new Game());
 
-		/*
-		 * Offline mode controls both players.
-		 */
 		game.setRestrictToLocalPlayer(false);
-
 		game.setNetworkReady(true);
-
-		game.setAuthoritativeOnlineMode(false);
-
-		/*
-		 * Get the new board.
-		 */
-		Board newBoard = game.getBoard();
-
-		newBoard.setAlignment(
-				Pos.CENTER);
-
-		/*
-		 * Replace the old board in the layout.
-		 */
-		VBox root = (VBox) board.getParent();
-
-		int boardIndex = root.getChildren()
-				.indexOf(board);
-
-		root.getChildren()
-				.set(
-						boardIndex,
-						newBoard);
-
-		/*
-		 * Update the board reference.
-		 */
-		board = newBoard;
-
-		VBox.setVgrow(
-				board,
-				Priority.ALWAYS);
-
-		/*
-		 * Register the callback on the new Game object.
-		 */
-		registerGameCallback();
-
-		/*
-		 * We are still inside an offline game.
-		 */
-		gameStarted = true;
 
 		setBoardActive(true);
 
-		setGameControlsVisible(true);
-
-		setSetupControlsVisible(false);
-
-		/*
-		 * Keep the game-status display appropriate
-		 * for offline play.
-		 */
 		networkStatusLabel.setText(
 				"Status: Offline Game");
 
-		roomCodeLabel.setText(
-				"Room: -");
-
-		/*
-		 * Update the new game's UI.
-		 */
 		updateDisplay();
 	}
 

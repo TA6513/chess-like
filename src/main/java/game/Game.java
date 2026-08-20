@@ -16,6 +16,30 @@ public class Game {
     private boolean networkReady = true;
     private Player winner;
 
+    private static final int[][] PLAYER_ONE_START = {
+            { 10, 0 },
+            { 10, 1 },
+            { 9, 0 },
+            { 10, 2 },
+            { 9, 1 },
+            { 8, 0 }
+    };
+
+    private static final int[][] PLAYER_TWO_START = {
+            { 0, 10 },
+            { 0, 9 },
+            { 1, 10 },
+            { 0, 8 },
+            { 1, 9 },
+            { 2, 10 }
+    };
+
+    private static final int[][] NEUTRAL_START = {
+            { 0, 0 },
+            { 5, 5 },
+            { 10, 10 }
+    };
+
     /*
      * The player controlled by this copy of the game.
      *
@@ -126,151 +150,60 @@ public class Game {
 
     }
 
+    private void createPieces(
+            Player owner,
+            int startingId,
+            int[][] positions,
+            List<Piece> pieces,
+            boolean claimStartingCells) {
+
+        for (int[] position : positions) {
+
+            Piece piece = new Piece(
+                    startingId++,
+                    owner);
+
+            pieces.add(piece);
+
+            if (claimStartingCells) {
+                placePiece(
+                        piece,
+                        position[0],
+                        position[1],
+                        true);
+            } else {
+                placePiece(
+                        piece,
+                        position[0],
+                        position[1],
+                        false);
+            }
+        }
+    }
+
     /*
      * Creates all pieces and places them on the board.
      */
     private void initializePieces() {
 
-        createPlayerOnePieces();
-        createPlayerTwoPieces();
-        createNeutralPieces();
-    }
-
-    /*
-     * Creates Player 1's six pieces.
-     *
-     * Player 1 starts in the southwest corner.
-     */
-    private void createPlayerOnePieces() {
-
-        int id = 1;
-
-        int[][] positions = {
-                { 10, 0 },
-                { 10, 1 },
-                { 9, 0 },
-                { 10, 2 },
-                { 9, 1 },
-                { 8, 0 }
-        };
-
-        for (int[] position : positions) {
-
-            Piece piece = new Piece(id++, Player.PLAYER_ONE);
-
-            playerOnePieces.add(piece);
-
-            placeStartingPiece(
-                    piece,
-                    position[0],
-                    position[1]);
-        }
-    }
-
-    /*
-     * Creates Player 2's six pieces.
-     *
-     * Player 2 starts in the northeast corner.
-     */
-    private void createPlayerTwoPieces() {
-
-        int id = 7;
-
-        int[][] positions = {
-                { 0, 10 },
-                { 0, 9 },
-                { 1, 10 },
-                { 0, 8 },
-                { 1, 9 },
-                { 2, 10 }
-        };
-
-        for (int[] position : positions) {
-
-            Piece piece = new Piece(id++, Player.PLAYER_TWO);
-
-            playerTwoPieces.add(piece);
-
-            placeStartingPiece(
-                    piece,
-                    position[0],
-                    position[1]);
-        }
-    }
-
-    /*
-     * Creates the three neutral pieces.
-     *
-     * Positions:
-     *
-     * Northwest: (0, 0)
-     * Center: (7, 7)
-     * Southeast: (14, 14)
-     */
-    private void createNeutralPieces() {
-
-        int id = 13;
-
-        /*
-         * Northwest neutral piece.
-         */
-        Piece northwest = new Piece(id++, Player.NEUTRAL);
-
-        neutralPieces.add(northwest);
-
-        placePiece(
-                northwest,
-                0,
-                0);
-
-        /*
-         * Center neutral piece.
-         */
-        Piece center = new Piece(id++, Player.NEUTRAL);
-
-        neutralPieces.add(center);
-
-        placePiece(
-                center,
-                5,
-                5);
-
-        /*
-         * Southeast neutral piece.
-         */
-        Piece southeast = new Piece(id++, Player.NEUTRAL);
-
-        neutralPieces.add(southeast);
-
-        placePiece(
-                southeast,
-                10,
-                10);
-    }
-
-    private void placeStartingPiece(
-            Piece piece,
-            int row,
-            int column) {
-
-        Cell cell = board.getCell(row, column);
-
-        if (cell == null) {
-            throw new IllegalArgumentException(
-                    "Invalid board position: ("
-                            + row + ", "
-                            + column + ")");
-        }
-
-        if (cell.isOccupied()) {
-            throw new IllegalStateException(
-                    "Cell is already occupied: ("
-                            + row + ", "
-                            + column + ")");
-        }
-
-        cell.claim(piece.getOwner());
-        cell.setPiece(piece);
+        createPieces(
+                Player.PLAYER_ONE,
+                1,
+                PLAYER_ONE_START,
+                playerOnePieces,
+                true);
+        createPieces(
+                Player.PLAYER_TWO,
+                7,
+                PLAYER_TWO_START,
+                playerTwoPieces,
+                true);
+        createPieces(
+                Player.NEUTRAL,
+                13,
+                NEUTRAL_START,
+                neutralPieces,
+                false);
     }
 
     /*
@@ -279,24 +212,25 @@ public class Game {
     private void placePiece(
             Piece piece,
             int row,
-            int column) {
+            int column,
+            boolean claim) {
 
         Cell cell = board.getCell(row, column);
 
         if (cell == null) {
-
             throw new IllegalArgumentException(
                     "Invalid board position: ("
-                            + row + ", "
-                            + column + ")");
+                            + row + ", " + column + ")");
         }
 
         if (cell.isOccupied()) {
-
             throw new IllegalStateException(
-                    "Cell is already occupied: ("
-                            + row + ", "
-                            + column + ")");
+                    "Cell already occupied: ("
+                            + row + ", " + column + ")");
+        }
+
+        if (claim) {
+            cell.claim(piece.getOwner());
         }
 
         cell.setPiece(piece);
@@ -346,34 +280,20 @@ public class Game {
             return false;
         }
 
-        /*
-         * Do some client-side validation so obviously
-         * illegal requests aren't unnecessarily sent.
-         *
-         * The dedicated server still performs the real
-         * authoritative validation.
-         */
-        Cell source = board.getCell(
-                move.getSourceRow(),
-                move.getSourceColumn());
+        MoveCells cells = getMoveCells(move);
 
-        Cell destination = board.getCell(
-                move.getDestinationRow(),
-                move.getDestinationColumn());
-
-        if (source == null
-                || destination == null
+        if (cells == null
                 || !isValidMove(
-                        source,
-                        destination)) {
+                        cells.source(),
+                        cells.destination())) {
 
             return false;
         }
 
         /*
-         * Dedicated-server mode.
-         *
-         * Do NOT modify the board yet.
+         * Dedicated-server mode:
+         * send the request without modifying
+         * the local board.
          */
         if (authoritativeOnlineMode) {
 
@@ -387,7 +307,7 @@ public class Game {
         }
 
         /*
-         * Offline/LAN mode.
+         * Offline / LAN.
          */
         return movePiece(move);
     }
@@ -643,27 +563,20 @@ public class Game {
      */
     private void resetPiecesForTurn() {
 
-        for (Piece piece : getAllPieces()) {
+        List<Piece> pieces = currentPlayer == Player.PLAYER_ONE
+                ? playerOnePieces
+                : playerTwoPieces;
+
+        for (Piece piece : pieces) {
+            piece.resetTurn();
+        }
+
+        for (Piece piece : neutralPieces) {
 
             if (piece.belongsTo(currentPlayer)) {
-
                 piece.resetTurn();
             }
         }
-    }
-
-    /*
-     * Returns a list containing every piece in the game.
-     */
-    private List<Piece> getAllPieces() {
-
-        List<Piece> allPieces = new ArrayList<>();
-
-        allPieces.addAll(playerOnePieces);
-        allPieces.addAll(playerTwoPieces);
-        allPieces.addAll(neutralPieces);
-
-        return allPieces;
     }
 
     /*
@@ -894,6 +807,37 @@ public class Game {
         return true;
     }
 
+    private record MoveCells(
+            Cell source,
+            Cell destination) {
+    }
+
+    private MoveCells getMoveCells(
+            Move move) {
+
+        if (move == null) {
+            return null;
+        }
+
+        Cell source = board.getCell(
+                move.getSourceRow(),
+                move.getSourceColumn());
+
+        Cell destination = board.getCell(
+                move.getDestinationRow(),
+                move.getDestinationColumn());
+
+        if (source == null
+                || destination == null) {
+
+            return null;
+        }
+
+        return new MoveCells(
+                source,
+                destination);
+    }
+
     private boolean applyMove(
             Cell source,
             Cell destination) {
@@ -980,115 +924,22 @@ public class Game {
     }
 
     /*
-     * Moves a piece using board coordinates.
-     */
-    public boolean movePiece(
-            int sourceRow,
-            int sourceColumn,
-            int destinationRow,
-            int destinationColumn) {
-
-        Cell source = board.getCell(
-                sourceRow,
-                sourceColumn);
-
-        Cell destination = board.getCell(
-                destinationRow,
-                destinationColumn);
-
-        if (source == null
-                || destination == null) {
-
-            return false;
-        }
-
-        return movePiece(
-                source,
-                destination);
-    }
-
-    /*
      * Performs a local move represented by a Move object.
      */
-    public boolean movePiece(Move move) {
+    private boolean movePiece(
+            Move move) {
 
-        if (move == null) {
+        MoveCells cells = getMoveCells(move);
+
+        if (cells == null) {
             return false;
         }
 
-        Cell source = board.getCell(
-                move.getSourceRow(),
-                move.getSourceColumn());
-
-        Cell destination = board.getCell(
-                move.getDestinationRow(),
-                move.getDestinationColumn());
-
-        if (source == null
-                || destination == null) {
-
-            return false;
-        }
-
-        return movePiece(
-                source,
-                destination);
-    }
-
-    /*
-     * Performs a local move using board cells.
-     *
-     * Successful moves are sent to the networking layer.
-     */
-    public boolean movePiece(
-            Cell source,
-            Cell destination) {
-
-        if (!networkReady) {
-            return false;
-        }
-
-        if (gameOver) {
-            return false;
-        }
-
-        /*
-         * A local player can only move during
-         * their own turn.
-         */
-        if (!isLocalPlayersTurn()) {
-            return false;
-        }
-
-        if (source == null
-                || destination == null) {
-
-            return false;
-        }
-
-        /*
-         * Create the network representation of
-         * the move before changing the board.
-         */
-        Move move = new Move(
-                source.getRow(),
-                source.getColumn(),
-                destination.getRow(),
-                destination.getColumn());
-
-        /*
-         * Apply the move locally.
-         */
         boolean success = applyMove(
-                source,
-                destination);
+                cells.source(),
+                cells.destination());
 
-        /*
-         * Only notify the networking layer if
-         * the move was successfully completed.
-         */
         if (success) {
-
             notifyMoveMade(move);
         }
 
@@ -1113,81 +964,45 @@ public class Game {
      * Otherwise the received move would be sent back
      * to the other computer.
      */
-    public boolean applyRemoteMove(Move move) {
+    public boolean applyRemoteMove(
+            Move move) {
 
-        if (move == null) {
-            return false;
-        }
-
-        if (gameOver) {
-            return false;
-        }
-
-        /*
-         * A remote move should only arrive when the
-         * other player is currently active.
-         */
-        if (isLocalPlayersTurn()) {
-            return false;
-        }
-
-        Cell source = board.getCell(
-                move.getSourceRow(),
-                move.getSourceColumn());
-
-        Cell destination = board.getCell(
-                move.getDestinationRow(),
-                move.getDestinationColumn());
-
-        if (source == null
-                || destination == null) {
+        if (move == null
+                || gameOver
+                || isLocalPlayersTurn()) {
 
             return false;
         }
 
-        /*
-         * Apply the move directly.
-         *
-         * This changes the local game state but
-         * does not trigger the network callback.
-         */
+        MoveCells cells = getMoveCells(move);
+
+        if (cells == null) {
+            return false;
+        }
+
         return applyMove(
-                source,
-                destination);
+                cells.source(),
+                cells.destination());
     }
 
     public boolean applyAuthoritativeMove(
             Move move) {
 
-        if (move == null) {
-            return false;
-        }
-
-        Cell source = board.getCell(
-                move.getSourceRow(),
-                move.getSourceColumn());
-
-        Cell destination = board.getCell(
-                move.getDestinationRow(),
-                move.getDestinationColumn());
-
-        if (source == null
-                || destination == null) {
+        if (move == null
+                || gameOver) {
 
             return false;
         }
 
-        /*
-         * The server already validated this action.
-         *
-         * Apply it without:
-         *
-         * - checking local ownership
-         * - sending it back to the network
-         */
+        MoveCells cells = getMoveCells(move);
+
+        if (cells == null) {
+            return false;
+        }
+
         return applyMove(
-                source,
-                destination);
+                cells.source(),
+                cells.destination());
     }
 
     /*
