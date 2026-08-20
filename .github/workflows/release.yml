@@ -1,0 +1,242 @@
+name: Build Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            os: windows-latest
+
+          - name: Linux
+            os: ubuntu-latest
+
+          - name: macOS
+            os: macos-latest
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 26
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "26"
+          cache: maven
+
+      - name: Build with Maven
+        run: mvn --batch-mode clean package
+
+      # ========================================
+      # Windows
+      # ========================================
+
+      - name: Package Windows application
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $Version = "${{ github.event.release.tag_name }}".TrimStart("v")
+
+          $AppJar = Get-ChildItem "target\*.jar" |
+              Where-Object {
+                  $_.Name -notlike "*-server.jar"
+              } |
+              Select-Object -First 1
+
+          if ($null -eq $AppJar) {
+              throw "Application JAR was not found."
+          }
+
+          Remove-Item "target\package" `
+              -Recurse `
+              -Force `
+              -ErrorAction SilentlyContinue
+
+          New-Item `
+              -ItemType Directory `
+              -Path "target\package\lib" `
+              -Force |
+              Out-Null
+
+          Copy-Item `
+              $AppJar.FullName `
+              "target\package\$($AppJar.Name)"
+
+          Copy-Item `
+              "target\lib\*.jar" `
+              "target\package\lib\"
+
+          New-Item `
+              -ItemType Directory `
+              -Path "dist" `
+              -Force |
+              Out-Null
+
+          jpackage `
+              --type app-image `
+              --name "Chess Like Game" `
+              --input "target\package" `
+              --main-jar $AppJar.Name `
+              --main-class game.Main `
+              --module-path "target\lib" `
+              --add-modules "javafx.controls,javafx.graphics,javafx.base" `
+              --java-options "--enable-native-access=javafx.graphics" `
+              --dest "dist"
+
+          Compress-Archive `
+              -Path "dist\Chess Like Game" `
+              -DestinationPath "dist\Chess-Like-Game-$Version-Windows-x64.zip" `
+              -Force
+
+          Remove-Item `
+              "dist\Chess Like Game" `
+              -Recurse `
+              -Force
+
+      # ========================================
+      # Linux
+      # ========================================
+
+      - name: Package Linux application
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -e
+
+          VERSION="${{ github.event.release.tag_name }}"
+          VERSION="${VERSION#v}"
+
+          APP_JAR=$(find target -maxdepth 1 -name "*.jar" ! -name "*-server.jar" | head -n 1)
+
+          if [ -z "$APP_JAR" ]; then
+              echo "Application JAR was not found."
+              exit 1
+          fi
+
+          JAR_NAME=$(basename "$APP_JAR")
+
+          rm -rf target/package
+          mkdir -p target/package/lib
+          mkdir -p dist
+
+          cp "$APP_JAR" "target/package/$JAR_NAME"
+          cp target/lib/*.jar target/package/lib/
+
+          jpackage \
+              --type app-image \
+              --name "Chess Like Game" \
+              --input target/package \
+              --main-jar "$JAR_NAME" \
+              --main-class game.Main \
+              --module-path target/lib \
+              --add-modules javafx.controls,javafx.graphics,javafx.base \
+              --java-options "--enable-native-access=javafx.graphics" \
+              --dest dist
+
+          tar \
+              -czf "dist/Chess-Like-Game-$VERSION-Linux-x64.tar.gz" \
+              -C dist \
+              "Chess Like Game"
+
+          rm -rf "dist/Chess Like Game"
+
+      # ========================================
+      # macOS
+      # ========================================
+
+      - name: Package macOS application
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -e
+
+          VERSION="${{ github.event.release.tag_name }}"
+          VERSION="${VERSION#v}"
+
+          APP_JAR=$(find target -maxdepth 1 -name "*.jar" ! -name "*-server.jar" | head -n 1)
+
+          if [ -z "$APP_JAR" ]; then
+              echo "Application JAR was not found."
+              exit 1
+          fi
+
+          JAR_NAME=$(basename "$APP_JAR")
+
+          rm -rf target/package
+          mkdir -p target/package/lib
+          mkdir -p dist
+
+          cp "$APP_JAR" "target/package/$JAR_NAME"
+          cp target/lib/*.jar target/package/lib/
+
+          jpackage \
+              --type app-image \
+              --name "Chess Like Game" \
+              --input target/package \
+              --main-jar "$JAR_NAME" \
+              --main-class game.Main \
+              --module-path target/lib \
+              --add-modules javafx.controls,javafx.graphics,javafx.base \
+              --java-options "--enable-native-access=javafx.graphics" \
+              --dest dist
+
+          cd dist
+
+          zip \
+              -r \
+              "Chess-Like-Game-$VERSION-macOS.zip" \
+              "Chess Like Game.app"
+
+          rm -rf "Chess Like Game.app"
+
+      # ========================================
+      # Save this platform's package
+      # ========================================
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Chess-Like-Game-${{ matrix.name }}
+          path: dist/*
+          if-no-files-found: error
+
+  # ==========================================
+  # Add all packages to GitHub Release
+  # ==========================================
+
+  publish:
+    name: Upload Release Files
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          path: release-files
+          merge-multiple: true
+
+      - name: Show release files
+        run: find release-files -maxdepth 1 -type f -print
+
+      - name: Upload packages to GitHub Release
+        run: |
+          gh release upload \
+            "${{ github.event.release.tag_name }}" \
+            release-files/* \
+            --repo "${{ github.repository }}" \
+            --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

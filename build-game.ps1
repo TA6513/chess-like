@@ -960,7 +960,6 @@ Windows may display a security warning because the application is not currently 
 
     gh release create `
         $ReleaseTag `
-        $ZipPath `
         --title $ReleaseTitle `
         --notes $ReleaseNotes
 
@@ -988,9 +987,14 @@ Windows may display a security warning because the application is not currently 
     Write-Host "    $ReleaseTag"
     Write-Host ""
 
-    Write-Host "Asset:"
-    Write-Host "    $ZipName"
+    Write-Host "GitHub Actions will now build:"
+    Write-Host "    Windows"
+    Write-Host "    Linux"
+    Write-Host "    macOS"
     Write-Host ""
+
+    Write-Host "The packages will be attached to:"
+    Write-Host "    $ReleaseTag"
 
     Write-Host "GitHub Release:"
     Write-Host ""
