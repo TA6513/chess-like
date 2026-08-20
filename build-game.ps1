@@ -4,9 +4,11 @@
 
 param (
 
-    # Add -DeployServer when you want the newly
-    # built server JAR uploaded to Linux.
-    [switch]$DeployServer
+    # Upload and restart the Linux dedicated server.
+    [switch]$DeployServer,
+
+    # Create and publish a GitHub Release.
+    [switch]$Release
 )
 
 $SshKey =
@@ -33,7 +35,46 @@ $PackageDir = "$TargetDir\package"
 
 $ReleaseDir = "release"
 $AppDir = "$ReleaseDir\$ProjectName"
-$ZipPath = "$ReleaseDir\$ProjectName.zip"
+$ZipName =
+"Chess-Like-Game-$ProjectVersion-Windows-x64.zip"
+
+$ZipPath =
+"$ReleaseDir\$ZipName"
+
+# --------------------------------------------
+# Project version
+# --------------------------------------------
+
+$PomPath =
+Join-Path `
+    $PSScriptRoot `
+    "pom.xml"
+
+if (-not (Test-Path $PomPath)) {
+
+    throw "pom.xml was not found."
+}
+
+[xml]$Pom =
+Get-Content `
+    $PomPath
+
+$ProjectVersion =
+$Pom.project.version
+
+if ([string]::IsNullOrWhiteSpace(
+        $ProjectVersion)) {
+
+    throw "Could not determine project version from pom.xml."
+}
+
+$ReleaseTag =
+"v$ProjectVersion"
+
+Write-Host "Version:"
+Write-Host "    $ProjectVersion"
+Write-Host ""
+
 
 # --------------------------------------------
 # JDK settings
@@ -648,3 +689,319 @@ and configure your Linux server settings.
 
 Write-Host "============================================"
 Write-Host ""
+
+# ============================================
+# Optional GitHub Release
+# ============================================
+
+if ($Release) {
+
+    Write-Host ""
+    Write-Host "============================================"
+    Write-Host "          Publishing GitHub Release"
+    Write-Host "============================================"
+    Write-Host ""
+
+    # ----------------------------------------
+    # Check Git
+    # ----------------------------------------
+
+    $GitCommand =
+    Get-Command git `
+        -ErrorAction SilentlyContinue
+
+    if ($null -eq $GitCommand) {
+
+        throw "git could not be found."
+    }
+
+    # ----------------------------------------
+    # Check GitHub CLI
+    # ----------------------------------------
+
+    $GhCommand =
+    Get-Command gh `
+        -ErrorAction SilentlyContinue
+
+    if ($null -eq $GhCommand) {
+
+        throw @"
+GitHub CLI could not be found.
+
+Install it with:
+
+    winget install --id GitHub.cli
+
+Then reopen PowerShell and run:
+
+    gh auth login
+"@
+    }
+
+    # ----------------------------------------
+    # Check GitHub authentication
+    # ----------------------------------------
+
+    Write-Host "[RELEASE 1/6] Checking GitHub authentication..."
+    Write-Host ""
+
+    gh auth status
+
+    if ($LASTEXITCODE -ne 0) {
+
+        throw @"
+GitHub CLI is not authenticated.
+
+Run:
+
+    gh auth login
+"@
+    }
+
+    # ----------------------------------------
+    # Check repository
+    # ----------------------------------------
+
+    Write-Host ""
+    Write-Host "[RELEASE 2/6] Checking Git repository..."
+    Write-Host ""
+
+    git rev-parse --is-inside-work-tree `
+        *> $null
+
+    if ($LASTEXITCODE -ne 0) {
+
+        throw "This directory is not a Git repository."
+    }
+
+    gh repo view `
+        *> $null
+
+    if ($LASTEXITCODE -ne 0) {
+
+        throw "GitHub CLI could not determine the GitHub repository."
+    }
+
+    # ----------------------------------------
+    # Require clean working tree
+    # ----------------------------------------
+
+    $GitStatus =
+    git status --porcelain
+
+    if (-not [string]::IsNullOrWhiteSpace(
+            ($GitStatus -join "`n"))) {
+
+        Write-Host ""
+        Write-Host "Uncommitted changes:"
+        Write-Host ""
+
+        git status --short
+
+        throw @"
+The Git working tree is not clean.
+
+Commit and push your changes before creating a release.
+"@
+    }
+
+    Write-Host "Git working tree is clean."
+
+    # ----------------------------------------
+    # Make sure current commit is pushed
+    # ----------------------------------------
+
+    Write-Host ""
+    Write-Host "[RELEASE 3/6] Checking remote branch..."
+    Write-Host ""
+
+    $CurrentBranch =
+    git branch --show-current
+
+    if ([string]::IsNullOrWhiteSpace(
+            $CurrentBranch)) {
+
+        throw "Could not determine the current Git branch."
+    }
+
+    git fetch origin
+
+    if ($LASTEXITCODE -ne 0) {
+
+        throw "Could not fetch from GitHub."
+    }
+
+    $LocalCommit =
+    git rev-parse HEAD
+
+    $RemoteCommit =
+    git rev-parse "origin/$CurrentBranch" `
+        2>$null
+
+    if ($LASTEXITCODE -ne 0) {
+
+        throw "Could not find origin/$CurrentBranch."
+    }
+
+    if ($LocalCommit -ne $RemoteCommit) {
+
+        throw @"
+The current commit does not match origin/$CurrentBranch.
+
+Push your changes before creating the release:
+
+    git push
+"@
+    }
+
+    Write-Host "Current commit is pushed."
+
+    # ----------------------------------------
+    # Check tag/release does not already exist
+    # ----------------------------------------
+
+    Write-Host ""
+    Write-Host "[RELEASE 4/6] Checking release tag..."
+    Write-Host ""
+
+    $ExistingTag =
+    git tag `
+        --list `
+        $ReleaseTag
+
+    if (-not [string]::IsNullOrWhiteSpace(
+            $ExistingTag)) {
+
+        throw "Git tag $ReleaseTag already exists."
+    }
+
+    gh release view `
+        $ReleaseTag `
+        *> $null
+
+    if ($LASTEXITCODE -eq 0) {
+
+        throw "GitHub Release $ReleaseTag already exists."
+    }
+
+    # ----------------------------------------
+    # Create and push Git tag
+    # ----------------------------------------
+
+    Write-Host ""
+    Write-Host "[RELEASE 5/6] Creating Git tag..."
+    Write-Host ""
+
+    git tag `
+        -a `
+        $ReleaseTag `
+        -m "Chess Like Game $ReleaseTag"
+
+    if ($LASTEXITCODE -ne 0) {
+
+        throw "Could not create Git tag $ReleaseTag."
+    }
+
+    git push origin `
+        $ReleaseTag
+
+    if ($LASTEXITCODE -ne 0) {
+
+        /*
+        * Remove the local tag if pushing it failed.
+        */
+        git tag -d $ReleaseTag `
+            *> $null
+
+        throw "Could not push Git tag $ReleaseTag."
+    }
+
+    # ----------------------------------------
+    # Create GitHub Release
+    # ----------------------------------------
+
+    Write-Host ""
+    Write-Host "[RELEASE 6/6] Creating GitHub Release..."
+    Write-Host ""
+
+    $ReleaseTitle =
+    "Chess Like Game $ReleaseTag"
+
+    $ReleaseNotes = @"
+# Chess Like Game $ReleaseTag
+
+## Features
+
+- Offline two-player games
+- LAN multiplayer
+- Online multiplayer through the dedicated server
+- Online game rooms
+- Territory claiming
+- Neutral-piece capturing
+- Enemy-piece elimination
+- Territory and elimination win conditions
+
+## Windows
+
+Download:
+
+$ZipName
+
+Extract the ZIP and run:
+
+Chess Like Game.exe
+
+Java and JavaFX do not need to be installed separately because the required runtime is included.
+
+## Note
+
+Windows may display a security warning because the application is not currently code-signed.
+"@
+
+    gh release create `
+        $ReleaseTag `
+        $ZipPath `
+        --title $ReleaseTitle `
+        --notes $ReleaseNotes
+
+    if ($LASTEXITCODE -ne 0) {
+
+        Write-Host ""
+        Write-Host "WARNING:"
+        Write-Host "The Git tag was pushed successfully, but the GitHub Release failed."
+        Write-Host ""
+
+        throw "Could not create GitHub Release $ReleaseTag."
+    }
+
+    Write-Host ""
+    Write-Host "============================================"
+    Write-Host "          RELEASE SUCCESSFUL"
+    Write-Host "============================================"
+    Write-Host ""
+
+    Write-Host "Version:"
+    Write-Host "    $ProjectVersion"
+    Write-Host ""
+
+    Write-Host "Tag:"
+    Write-Host "    $ReleaseTag"
+    Write-Host ""
+
+    Write-Host "Asset:"
+    Write-Host "    $ZipName"
+    Write-Host ""
+
+    Write-Host "GitHub Release:"
+    Write-Host ""
+
+    $ExistingRelease =
+    gh release list `
+        --json tagName `
+        --jq ".[] | select(.tagName == `"$ReleaseTag`") | .tagName"
+
+    if ($ExistingRelease -eq $ReleaseTag) {
+
+        throw "GitHub Release $ReleaseTag already exists."
+    }
+}
